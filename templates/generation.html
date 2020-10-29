@@ -36,6 +36,17 @@
                     });
                     
                     
+                    // This sends the message to server that the user typed and pressed enter
+                    $('#generation_text').keypress(function(e) {
+                        var code = e.keyCode || e.which;
+                        if (code == 13) {
+                            text = $('#generation_text').val();
+                            $('#generation_text').val('');
+                            socket.emit('user_sent_message_generate', {data: text});
+                        }
+                    });
+                    
+                    
                     // This sends the feedback to server that the user typed and pressed enter
 //                     $('#feedback').keypress(function(e) {
 //                         var code = e.keyCode || e.which;
@@ -117,7 +128,7 @@
 
             </script>
             <div>
-                <h1 class="title is-4" style="width: 100%; text-align: left;">Welcome to our chatbot study! Testing templates</h1>
+                <h1 class="title is-4" style="width: 100%; text-align: left;">Welcome to our chatbot study! Testing generation</h1>
 <!-- 
                 Crisisbot is a tool that we are developing to help suicide prevention hotline counselors practice counseling. 
                 It is a fictional person contacting a fictional text hotline for help. 
@@ -179,7 +190,7 @@
 
                         <!-- Text area and input area -->
                         <textarea readonly class="textarea" id="chat" style="height: 400px;"></textarea><br>
-                        <input class="input" id="text" placeholder="Enter your message here and press enter to send."><br><br>                                  
+                        <input class="input" id="generation_text" placeholder="Enter your message here and press enter to send."><br><br>                                  
                     </div>
 <!--                 </div> -->
 
