@@ -13,7 +13,7 @@ import pickle as pkl
 import random
 import sys
 import pandas as pd
-
+import copy
 
 
 
@@ -80,6 +80,8 @@ chat_flows = pd.read_csv('data/chat_flows.csv')
 CONDITION_NAMES = list(chat_flows.columns)
 CONDITION_MESSAGES = {x: list(chat_flows[x].values) for x in CONDITION_NAMES}
 
+print('Flow conditions: ')
+print(CONDITION_NAMES)
 
 # parser = ParlaiParser(True, True, 'Evaluate a model')
 # opt = parser.parse_args()
@@ -92,12 +94,19 @@ opt = Opt(
                 'init_model': None,
                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_v1_gpt2_small',
                 'load_from_checkpoint': True,
+                'override':{'inference': 'beam', 'beam_size': 5, 'skip_generation': False, 'beam_block_ngram': 3, 'beam_context_block_ngram': 3}
             }
         )
 agent = create_agent_from_opt_file(opt)
 agent.set_interactive_mode(True)
-print('parlai agent loaded!')
 
+# agent.opt['inference'] = 'beam'
+# agent.opt['beam_size'] = 5
+# # agent.opt['beam_min_length'] = 10 
+# agent.opt['beam_block_ngram'] =  3
+
+print('parlai agent loaded!, opt: ')
+print(agent.opt)
 
 clients = []
 session_info = {}
@@ -135,6 +144,13 @@ def user_root():
 def generation_root():
     """ Send HTML from the server."""
     return render_template('generation.html')
+    
+    
+    
+@app.route('/interleave/', methods=['GET'])
+def interleave_root():
+    """ Send HTML from the server."""
+    return render_template('interleave.html')
     
     
     
@@ -331,22 +347,30 @@ def user_sent_message_generate(message):
         agent.reset()
         
         # set model history as user's conversation history
-        agent.history = session_info[request.sid]['parlai_history']
+        agent.history = copy.deepcopy(session_info[request.sid]['parlai_history'])
         
+        print('PRE-GEN: ')
+        print(agent.history.history_strings)
         # observe user input        
         agent.observe(package_text(input_text))
         
         # generate bot response
         agent_output = agent.act()
-        print(agent_output)
         bot_response = normalize_reply(agent_output['text'])
+        
+        print(agent_output)
+        print('POST-GEN: ')
+        print(agent.history.history_strings)
         
         
         # make sure to store updated user's history
-        session_info[request.sid]['parlai_history'] = agent.history
+        session_info[request.sid]['parlai_history'] = copy.deepcopy(agent.history)
         
         # make sure model history is reset
         agent.reset()
+        
+        print('POST-RESET: ')
+        print(agent.history.history_strings)
         
 #         input_text = raw_user_input_text.lower() # debug: review the preprocessing of the raw input text.
         
@@ -388,6 +412,119 @@ def user_sent_message_generate(message):
             
     else:
         emit('render_sys_message', {"data": '[oops, please enter message text]'}, room=request.sid)
+        
+
+
+@socketio.on('user_sent_message_interleave')   
+def user_sent_message_interleave(message):
+    
+    """
+    Called when the participant sends a message to the interleave approach.
+    """
+    
+    if len( message["data"].strip()) > 0:
+        session_info[request.sid]['num_written'] += 1
+    # message['count'] = session_info[request.sid]['num_written']
+    
+    flow_condition = session_info[request.sid]['condition'].split('-')[0]
+    session_info[request.sid]['condition'] = flow_condition+'-interleave'
+    condition = session_info[request.sid]['condition']
+    
+    pid = session_info[request.sid]['pid']
+    exchange_num = session_info[request.sid]['num_written']
+    
+    
+    # Extract a string of the user's message
+    raw_user_input_text = message["data"]
+    flow_has_more = int(exchange_num/2) < len(CONDITION_MESSAGES[flow_condition])
+    input_not_empty = len(raw_user_input_text.strip()) > 0
+    
+#     message['is_done'] = 'false' if flow_has_more else 'true'
+    emit('render_usr_message', message, room=request.sid)
+    
+    if input_not_empty:  
+        
+        
+        input_text = raw_user_input_text
+        
+        # make sure model history is reset
+        agent.reset()
+        
+        # set model history as user's conversation history
+        agent.history = copy.deepcopy(session_info[request.sid]['parlai_history'])
+        
+        print('PRE-GEN: ')
+        print(agent.history.history_strings)
+        # observe user input        
+        agent.observe(package_text(input_text))
+        
+        
+        if flow_has_more and (exchange_num % 2 == 0):
+            bot_response = CONDITION_MESSAGES[flow_condition][int(exchange_num/2)]
+            
+            agent.history.add_reply(bot_response)
+        
+        else:        
+            # generate bot response
+            agent_output = agent.act()
+            bot_response = normalize_reply(agent_output['text'])
+        
+            print(agent_output)
+
+        print('POST-GEN: ')
+        print(agent.history.history_strings)
+        
+        # make sure to store updated user's history
+        session_info[request.sid]['parlai_history'] = copy.deepcopy(agent.history)
+        
+        # make sure model history is reset
+        agent.reset()
+        
+        print('POST-RESET: ')
+        print(agent.history.history_strings)
+        
+#         input_text = raw_user_input_text.lower() # debug: review the preprocessing of the raw input text.
+        
+#         output_text, response_info = MODEL_DICT[selected_model].chat(input_text, 
+#                                                                     compound_sid, 
+#                                                                     '', # assignmentid
+#                   
+#         bot_response = CONDITION_MESSAGES[condition][exchange_num]
+
+
+        output_text = bot_response                                       
+   
+        with sqlite3.connect('data/session_info.db') as conn:
+            cur = conn.cursor()
+#             sid text, pid text, condition text, message text, response text, exchange_num int
+            db_input = (request.sid, pid, condition, 
+                        input_text, output_text, 
+                        exchange_num)
+            cur.executemany("INSERT INTO message_pairs VALUES (?, ?, ?, ?, ?, ?)", [db_input])
+            conn.commit()
+        
+        print('Into message_pairs: ', db_input)
+        
+#         output_text = output_text.replace('fucking', '<EXPLETIVE>').replace('fuck', '<EXPLETIVE>')
+    
+        # Render our response
+#         time.sleep(2)
+        emit('render_sys_message', {"data": output_text}, room=request.sid)
+#         response_info_str = json.dumps(response_info) # debug: uncomment storing to sql below.
+#         with sqlite3.connect('data/session_info.db') as conn:
+#             cur = conn.cursor()
+#             cur.executemany("INSERT INTO response_info VALUES (?, ?)", [(compound_sid, response_info_str,)])
+#             conn.commit()
+        
+        session_info[request.sid]['convo'].append((raw_user_input_text, output_text))
+        
+#     elif not flow_has_more:
+#         emit('render_sys_message', {"data": '[Chat completed. Please continue to survey.]'}, room=request.sid)
+            
+    else:
+        emit('render_sys_message', {"data": '[oops, please enter message text]'}, room=request.sid)
+        
+        
         
         
         
