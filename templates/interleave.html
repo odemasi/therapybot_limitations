@@ -22,7 +22,7 @@
 
 
                     socket.on('connect', function() {
-                        socket.emit('user_joined', {});
+                        socket.emit('user_joined', {agent: 'therapybot'});
                     });
 
                     // This sends the message to server that the user typed and pressed enter
@@ -42,7 +42,7 @@
                         if (code == 13) {
                             text = $('#interleave_text').val();
                             $('#interleave_text').val('');
-                            socket.emit('user_sent_message_interleave', {data: text});
+                            socket.emit('user_sent_message_interleave', {data: text, agent: 'therapybot'});
                         }
                     });
                     
@@ -63,7 +63,7 @@
                         if (code == 13) {
                             pid_text = $('#pid_input').val();
                             $('#pid_input').val('');
-                            socket.emit('user_sent_pid', {data: pid_text});
+                            socket.emit('user_sent_pid', {data: pid_text, agent: 'therapybot'});
                         }
                     });
                     

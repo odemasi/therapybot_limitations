@@ -22,18 +22,18 @@
 
 
                     socket.on('connect', function() {
-                        socket.emit('user_joined', {});
+                        socket.emit('user_joined', { agent: 'therapybot'});
                     });
 
                     // This sends the message to server that the user typed and pressed enter
-                    $('#text').keypress(function(e) {
-                        var code = e.keyCode || e.which;
-                        if (code == 13) {
-                            text = $('#text').val();
-                            $('#text').val('');
-                            socket.emit('user_sent_message', {data: text});
-                        }
-                    });
+//                     $('#text').keypress(function(e) {
+//                         var code = e.keyCode || e.which;
+//                         if (code == 13) {
+//                             text = $('#text').val();
+//                             $('#text').val('');
+//                             socket.emit('user_sent_message', {data: text});
+//                         }
+//                     });
                     
                     
                     // This sends the message to server that the user typed and pressed enter
@@ -42,7 +42,7 @@
                         if (code == 13) {
                             text = $('#generation_text').val();
                             $('#generation_text').val('');
-                            socket.emit('user_sent_message_generate', {data: text});
+                            socket.emit('user_sent_message_generate', {data: text, agent: 'therapybot'});
                         }
                     });
                     
@@ -63,7 +63,7 @@
                         if (code == 13) {
                             pid_text = $('#pid_input').val();
                             $('#pid_input').val('');
-                            socket.emit('user_sent_pid', {data: pid_text});
+                            socket.emit('user_sent_pid', {data: pid_text, agent: 'therapybot'});
                         }
                     });
                     

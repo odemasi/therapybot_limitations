@@ -15,7 +15,7 @@ import sys
 import pandas as pd
 import copy
 
-
+import torch
 
 from parlai.core.params import ParlaiParser, print_announcements
 from parlai.core.agents import create_agent, create_agent_from_model_file, create_agent_from_opt_file
@@ -86,6 +86,9 @@ print(CONDITION_NAMES)
 # parser = ParlaiParser(True, True, 'Evaluate a model')
 # opt = parser.parse_args()
 # agent = create_agent(opt, requireModelExists=True)
+THERAPYBOT_GPU = 0
+REDDIT_GPU = 1
+
 
 opt = Opt(
             {
@@ -93,20 +96,54 @@ opt = Opt(
                 'model': 'hugging_face/gpt2',
                 'init_model': None,
                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_v1_gpt2_small',
+#                 'model': 'image_seq2seq',
+#                 'init_model': None,
+#                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/fine_tuned_base_dodeca',
                 'load_from_checkpoint': True,
-                'override':{'inference': 'beam', 'beam_size': 5, 'skip_generation': False, 'beam_block_ngram': 3, 'beam_context_block_ngram': 3}
+                'override':{'gpu': THERAPYBOT_GPU, 'inference': 'beam', 'beam_size': 5, 'skip_generation': False, 'beam_block_ngram': 3, 'beam_context_block_ngram': 3}
             }
         )
 agent = create_agent_from_opt_file(opt)
 agent.set_interactive_mode(True)
+
+
+
+reddit_opt = Opt(
+            {
+                'datapath': 'dummy_path',
+                'model': 'image_seq2seq',
+                'init_model': None,
+                'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/data/models/dodecadialogue/reddit_ft/model',
+                'load_from_checkpoint': True,
+                'override':{'gpu': REDDIT_GPU, 
+                            'inference': 'beam', 
+                            'beam_size': 5, 
+                            'skip_generation': False, 
+                            'beam_block_ngram': 3, 
+                            'beam_context_block_ngram': 3, 
+#                             "allow_missing_init_opts": False, 
+                            'parlai_home': '/home/oademasi/transfer-learning-conv-ai/ParlAI', 
+                            "image_features_dim": 2048,
+                            "image_encoder_num_layers": 1,
+                            "n_image_tokens": 1,
+                            "n_image_channels": 1,
+                            "include_image_token": True,
+                            "image_fusion_type": "late",
+                            'beam_min_length': 10
+                            }
+            }
+        )
+reddit_agent = create_agent_from_opt_file(reddit_opt)
+reddit_agent.set_interactive_mode(True)
+
+agents = {'therapybot': agent, 'ethics_base': reddit_agent}
 
 # agent.opt['inference'] = 'beam'
 # agent.opt['beam_size'] = 5
 # # agent.opt['beam_min_length'] = 10 
 # agent.opt['beam_block_ngram'] =  3
 
-print('parlai agent loaded!, opt: ')
-print(agent.opt)
+print('parlai reddit agent loaded!')
 
 clients = []
 session_info = {}
@@ -151,6 +188,12 @@ def generation_root():
 def interleave_root():
     """ Send HTML from the server."""
     return render_template('interleave.html')
+    
+    
+@app.route('/ethicsbot_a/', methods=['GET'])
+def ethicsbot_a_root():
+    """ Send HTML from the server."""
+    return render_template('ethicsbot_a.html')
     
     
     
@@ -213,9 +256,11 @@ def interleave_root():
 def user_joined(message):
     """Sent by clients when a user enters a room.
     A status message is broadcast to all people in the room."""
-
+    print(message)
 #     condition = random.choice(CONDITION_NAMES)
     # Add client to client list
+    torch.cuda.set_device(agents[message['agent']].opt['gpu'])
+    parlai_history = copy.deepcopy(agents[message['agent']].build_history()) if message['agent'] != 'none' else ''
     session_info[request.sid] = {'joined_time':datetime.datetime.now(), 
                                     'num_written': NUM_WRITTEN_AT_START,
 #                                     'condition': '',
@@ -223,7 +268,7 @@ def user_joined(message):
 #                                     'hitid': hitid, 
 #                                     'model_name': MTURK_MODEL_NAMES[random.randrange(len(MTURK_MODEL_NAMES))]
                                     'convo': [],
-                                    'parlai_history': agent.build_history()} 
+                                    'parlai_history': parlai_history} #NOTE: this should build an agent-agnostic empty history, but check the agent doesn't matter.
     
     clients.append(request.sid)
 
@@ -277,20 +322,28 @@ def user_sent_pid(message):
 #     locations = ['top', 'middle', 'bottom'] if message["version"] == 'distinct' else ['left', 'center', 'right']
     
     pid = message["data"]
-    selected_condition = get_condition_for_participant(pid)
+    chosen_agent = message['agent']
+    
+    if chosen_agent == 'ethics_base':
+        session_info[request.sid]['condition'] = chosen_agent
+        selected_condition = 'ethics_base'
+        first_message = '[Please write the first message]'
+        
+    else: 
+        selected_condition = get_condition_for_participant(pid)
+        first_message = CONDITION_MESSAGES[selected_condition][0]
+        session_info[request.sid]['convo'].append(('START', first_message))
+        session_info[request.sid]['condition'] = selected_condition + '-' + chosen_agent
     
     
-    first_message = CONDITION_MESSAGES[selected_condition][0]
-    session_info[request.sid]['convo'].append(('START', first_message))
-    session_info[request.sid]['condition'] = selected_condition
     session_info[request.sid]['pid'] = pid
-    
+    condition = session_info[request.sid]['condition']
     emit('render_pid', {"data":'Participant ID "%s". Session loading first message' %  message["data"]}, room=request.sid)
         
     with sqlite3.connect('data/session_info.db') as conn:
         cur = conn.cursor()
 #             sid text, pid text, condition text, message text, response text
-        db_input = (request.sid, pid, selected_condition, 'START', first_message, session_info[request.sid]['num_written'])
+        db_input = (request.sid, pid, condition, 'START', first_message, session_info[request.sid]['num_written'])
         cur.executemany("INSERT INTO message_pairs VALUES (?, ?, ?, ?, ?, ?)", [db_input,])
         conn.commit()
     print('INTO MESSAGE_PAIRS: ', db_input)
@@ -300,7 +353,8 @@ def user_sent_pid(message):
     
     # self_observe the first message into the history of the agent HERE
 #     first_reply = {'id': 'Gpt2', 'episode_done': False, 'text': first_message}
-    session_info[request.sid]['parlai_history'].add_reply(first_message)
+    if chosen_agent != 'ethics_base':
+        session_info[request.sid]['parlai_history'].add_reply(first_message)
     
     print("participant id entered", pid)
     
@@ -323,11 +377,12 @@ def user_sent_message_generate(message):
         session_info[request.sid]['num_written'] += 1
     # message['count'] = session_info[request.sid]['num_written']
     
-    session_info[request.sid]['condition'] = 'generation'
-    
+#     session_info[request.sid]['condition'] = 'generation'
+    agent_choice = message["agent"]
     
     pid = session_info[request.sid]['pid']
-    condition = session_info[request.sid]['condition']
+    condition = session_info[request.sid]['condition']#+'-'+agent_choice
+#     condition = agent_choice
     exchange_num = session_info[request.sid]['num_written']
     
     
@@ -343,34 +398,36 @@ def user_sent_message_generate(message):
     
         input_text = raw_user_input_text
         
+        torch.cuda.set_device(agents[message['agent']].opt['gpu'])
+        
         # make sure model history is reset
-        agent.reset()
+        agents[agent_choice].reset()
         
         # set model history as user's conversation history
-        agent.history = copy.deepcopy(session_info[request.sid]['parlai_history'])
+        agents[agent_choice].history = copy.deepcopy(session_info[request.sid]['parlai_history'])
         
         print('PRE-GEN: ')
-        print(agent.history.history_strings)
+        print(agents[agent_choice].history.history_strings)
         # observe user input        
-        agent.observe(package_text(input_text))
+        agents[agent_choice].observe(package_text(input_text))
         
         # generate bot response
-        agent_output = agent.act()
+        agent_output = agents[agent_choice].act()
         bot_response = normalize_reply(agent_output['text'])
         
         print(agent_output)
         print('POST-GEN: ')
-        print(agent.history.history_strings)
+        print(agents[agent_choice].history.history_strings)
         
         
         # make sure to store updated user's history
-        session_info[request.sid]['parlai_history'] = copy.deepcopy(agent.history)
+        session_info[request.sid]['parlai_history'] = copy.deepcopy(agents[agent_choice].history)
         
         # make sure model history is reset
-        agent.reset()
+        agents[agent_choice].reset()
         
         print('POST-RESET: ')
-        print(agent.history.history_strings)
+        print(agents[agent_choice].history.history_strings)
         
 #         input_text = raw_user_input_text.lower() # debug: review the preprocessing of the raw input text.
         
@@ -426,8 +483,9 @@ def user_sent_message_interleave(message):
         session_info[request.sid]['num_written'] += 1
     # message['count'] = session_info[request.sid]['num_written']
     
+    agent_choice = message['agent']
     flow_condition = session_info[request.sid]['condition'].split('-')[0]
-    session_info[request.sid]['condition'] = flow_condition+'-interleave'
+#     session_info[request.sid]['condition'] = flow_condition+'-interleave'
     condition = session_info[request.sid]['condition']
     
     pid = session_info[request.sid]['pid']
@@ -447,41 +505,43 @@ def user_sent_message_interleave(message):
         
         input_text = raw_user_input_text
         
+        torch.cuda.set_device(agents[message['agent']].opt['gpu'])
+        
         # make sure model history is reset
-        agent.reset()
+        agents[agent_choice].reset()
         
         # set model history as user's conversation history
-        agent.history = copy.deepcopy(session_info[request.sid]['parlai_history'])
+        agents[agent_choice].history = copy.deepcopy(session_info[request.sid]['parlai_history'])
         
         print('PRE-GEN: ')
-        print(agent.history.history_strings)
+        print(agents[agent_choice].history.history_strings)
         # observe user input        
-        agent.observe(package_text(input_text))
+        agents[agent_choice].observe(package_text(input_text))
         
         
         if flow_has_more and (exchange_num % 2 == 0):
             bot_response = CONDITION_MESSAGES[flow_condition][int(exchange_num/2)]
             
-            agent.history.add_reply(bot_response)
+            agents[agent_choice].history.add_reply(bot_response)
         
         else:        
             # generate bot response
-            agent_output = agent.act()
+            agent_output = agents[agent_choice].act()
             bot_response = normalize_reply(agent_output['text'])
         
             print(agent_output)
 
         print('POST-GEN: ')
-        print(agent.history.history_strings)
+        print(agents[agent_choice].history.history_strings)
         
         # make sure to store updated user's history
-        session_info[request.sid]['parlai_history'] = copy.deepcopy(agent.history)
+        session_info[request.sid]['parlai_history'] = copy.deepcopy(agents[agent_choice].history)
         
         # make sure model history is reset
-        agent.reset()
+        agents[agent_choice].reset()
         
         print('POST-RESET: ')
-        print(agent.history.history_strings)
+        print(agents[agent_choice].history.history_strings)
         
 #         input_text = raw_user_input_text.lower() # debug: review the preprocessing of the raw input text.
         
@@ -542,12 +602,13 @@ def user_sent_message(message):
     
     pid = session_info[request.sid]['pid']
     condition = session_info[request.sid]['condition']
+    flow_condition = condition.split('-')[0]
     exchange_num = session_info[request.sid]['num_written']
     
     
     # Extract a string of the user's message
     raw_user_input_text = message["data"]
-    flow_has_more = exchange_num < len(CONDITION_MESSAGES[condition])
+    flow_has_more = exchange_num < len(CONDITION_MESSAGES[flow_condition])
     input_not_empty = len(raw_user_input_text.strip()) > 0
     
     message['is_done'] = 'false' if flow_has_more else 'true'
@@ -564,7 +625,7 @@ def user_sent_message(message):
 #                                                                     '', # assignmentid
 #                   
         input_text = raw_user_input_text
-        bot_response = CONDITION_MESSAGES[condition][exchange_num]
+        bot_response = CONDITION_MESSAGES[flow_condition][exchange_num]
         output_text = bot_response                                       
    
         with sqlite3.connect('data/session_info.db') as conn:
