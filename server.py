@@ -259,8 +259,10 @@ def user_joined(message):
     print(message)
 #     condition = random.choice(CONDITION_NAMES)
     # Add client to client list
-    torch.cuda.set_device(agents[message['agent']].opt['gpu'])
-    parlai_history = copy.deepcopy(agents[message['agent']].build_history()) if message['agent'] != 'none' else ''
+    if message['agent'] != 'covid_flow':
+        torch.cuda.set_device(agents[message['agent']].opt['gpu'])
+    parlai_history = copy.deepcopy(agents[message['agent']].build_history()) if message['agent'] != 'covid_flow' else ''
+        
     session_info[request.sid] = {'joined_time':datetime.datetime.now(), 
                                     'num_written': NUM_WRITTEN_AT_START,
 #                                     'condition': '',
@@ -353,7 +355,7 @@ def user_sent_pid(message):
     
     # self_observe the first message into the history of the agent HERE
 #     first_reply = {'id': 'Gpt2', 'episode_done': False, 'text': first_message}
-    if chosen_agent != 'ethics_base':
+    if chosen_agent not in ['ethics_base', 'covid_flow']:
         session_info[request.sid]['parlai_history'].add_reply(first_message)
     
     print("participant id entered", pid)
