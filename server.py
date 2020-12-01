@@ -35,9 +35,11 @@ import parlai.utils.logging as logging
 from parlai.core.opt import Opt
 from parlai.utils.strings import normalize_reply
 
-import json
-import random
 
+# For Blender
+import requests
+import redis
+import hashlib
 
 
 
@@ -80,63 +82,91 @@ chat_flows = pd.read_csv('data/chat_flows.csv')
 CONDITION_NAMES = list(chat_flows.columns)
 CONDITION_MESSAGES = {x: list(chat_flows[x].values) for x in CONDITION_NAMES}
 
+
+chat_flows_no_ack = pd.read_csv('data/chat_flows_no_ack.csv')
+CONDITION_NAMES_NO_ACK = list(chat_flows_no_ack.columns)
+CONDITION_MESSAGES_NO_ACK = {x: list(chat_flows_no_ack[x].values) for x in CONDITION_NAMES_NO_ACK}
+
 print('Flow conditions: ')
 print(CONDITION_NAMES)
 
 # parser = ParlaiParser(True, True, 'Evaluate a model')
 # opt = parser.parse_args()
 # agent = create_agent(opt, requireModelExists=True)
-THERAPYBOT_GPU = 0
-REDDIT_GPU = 1
+THERAPYBOT_GPU = 1 # These index the visible devices?
+REDDIT_GPU = 0
 
 
+##### overfit on full crisisbot counselor messages
+# opt = Opt(
+#             {
+#                 'datapath': 'dummy_path',
+#                 'model': 'hugging_face/gpt2',
+#                 'init_model': None,
+#                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_v1_gpt2_small',
+# #                 'model': 'image_seq2seq',
+# #                 'init_model': None,
+# #                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/fine_tuned_base_dodeca',
+#                 'load_from_checkpoint': True,
+#                 'override':{'gpu': THERAPYBOT_GPU, 'inference': 'beam', 'beam_size': 5, 'skip_generation': False, 'beam_block_ngram': 3, 'beam_context_block_ngram': 3}
+#             }
+#         )
+        
+
+#### Crisisbot first counselor sentence + empathetic dialogues weighted 1:9
 opt = Opt(
             {
                 'datapath': 'dummy_path',
                 'model': 'hugging_face/gpt2',
                 'init_model': None,
-                'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_v1_gpt2_small',
+#                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_v3_first_sent_gpt2_small',
+                'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_v2_first_sent_gpt2_small',
 #                 'model': 'image_seq2seq',
 #                 'init_model': None,
 #                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/fine_tuned_base_dodeca',
                 'load_from_checkpoint': True,
-                'override':{'gpu': THERAPYBOT_GPU, 'inference': 'beam', 'beam_size': 5, 'skip_generation': False, 'beam_block_ngram': 3, 'beam_context_block_ngram': 3}
+                'override':{'gpu': THERAPYBOT_GPU, 'beam-min-length': 3, 'inference': 'beam', 'beam_size': 3, 'skip_generation': False, 'beam_block_ngram': 3, 'beam_context_block_ngram': 3, 'beam_block_list_filename': '/home/oademasi/therapybot_limitations/block_list.txt'}
             }
-        )
-agent = create_agent_from_opt_file(opt)
-agent.set_interactive_mode(True)
+        )        
+
+# agent = create_agent_from_opt_file(opt)
+# agent.set_interactive_mode(True)
 
 
 
-reddit_opt = Opt(
-            {
-                'datapath': 'dummy_path',
-                'model': 'image_seq2seq',
-                'init_model': None,
-                'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/data/models/dodecadialogue/reddit_ft/model',
-                'load_from_checkpoint': True,
-                'override':{'gpu': REDDIT_GPU, 
-                            'inference': 'beam', 
-                            'beam_size': 5, 
-                            'skip_generation': False, 
-                            'beam_block_ngram': 3, 
-                            'beam_context_block_ngram': 3, 
-#                             "allow_missing_init_opts": False, 
-                            'parlai_home': '/home/oademasi/transfer-learning-conv-ai/ParlAI', 
-                            "image_features_dim": 2048,
-                            "image_encoder_num_layers": 1,
-                            "n_image_tokens": 1,
-                            "n_image_channels": 1,
-                            "include_image_token": True,
-                            "image_fusion_type": "late",
-                            'beam_min_length': 10
-                            }
-            }
-        )
-reddit_agent = create_agent_from_opt_file(reddit_opt)
-reddit_agent.set_interactive_mode(True)
+# reddit_opt = Opt(
+#             {
+#                 'datapath': 'dummy_path',
+#                 'model': 'image_seq2seq',
+#                 'init_model': None,
+#                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/data/models/dodecadialogue/reddit_ft/model',
+#                 'load_from_checkpoint': True,
+#                 'override':{'gpu': REDDIT_GPU, 
+#                             'inference': 'beam', 
+#                             'beam_size': 5, 
+#                             'skip_generation': False, 
+#                             'beam_block_ngram': 3, 
+#                             'beam_context_block_ngram': 3, 
+# #                             "allow_missing_init_opts": False, 
+#                             'parlai_home': '/home/oademasi/transfer-learning-conv-ai/ParlAI', 
+#                             "image_features_dim": 2048,
+#                             "image_encoder_num_layers": 1,
+#                             "n_image_tokens": 1,
+#                             "n_image_channels": 1,
+#                             "include_image_token": True,
+#                             "image_fusion_type": "late",
+#                             'beam_min_length': 10
+#                             }
+#             }
+#         )
+# reddit_agent = create_agent_from_opt_file(reddit_opt)
+# reddit_agent.set_interactive_mode(True)
 
-agents = {'therapybot': agent, 'ethics_base': reddit_agent}
+# agents = {'therapybot': agent, 'ethics_base': reddit_agent}
+
+# agents = {'therapybot': agent}
+USE_BLENDER = False
+
 
 # agent.opt['inference'] = 'beam'
 # agent.opt['beam_size'] = 5
@@ -147,6 +177,56 @@ print('parlai reddit agent loaded!')
 
 clients = []
 session_info = {}
+
+###################
+##### BLENDER #####
+###################
+BLENDER_ACKNOWLEDGEMENT_URL = "http://54.227.176.241:5007/blender/redis_generate"
+
+
+def get_blender_response(last_user_text, last_bot_response, current_user_text, key=str(time.time())):
+    request_data = {
+        "last_turn_text": last_user_text,
+        "last_turn_response": last_bot_response,
+        "text": current_user_text,
+        "blender_id": key
+    }
+
+    try:
+        requests.post(url=BLENDER_ACKNOWLEDGEMENT_URL, json=request_data, timeout=(1, 0.001))
+    except Exception as e:
+        pass
+        print(e) # exception doesn't matter here, a read timed out is expected here
+
+    time.sleep(1.8)
+    result = RedisHelper().get(RedisHelper.PREFIX_BLENDER_ACKNOWLEDGEMENT, key)
+    return result
+
+class RedisHelper:
+    SERVER_IP = '54.145.233.163'
+    PREFIX_BLENDER_ACKNOWLEDGEMENT = "gunrock:blender:question_handling"
+
+    def __init__(self):
+        self.r = redis.StrictRedis(
+            host=self.SERVER_IP,
+            port=16517,
+            db=0,
+            password="alexaprize",
+            charset='utf-8',
+            decode_responses=True)
+        
+    def get(self, prefix, key):
+        key = hashlib.md5(key.encode()).hexdigest()
+
+        results = self.r.get(prefix + ':' + key)
+        if results:
+            return json.loads(results)
+        return None
+
+
+
+
+
 
 @app.route('/')
 def root():
@@ -175,7 +255,15 @@ def user_root():
     """ Send HTML from the server."""
     return render_template('user.html')
     
+
+@app.route('/annotation/', methods=['GET'])
+def annotation_root():
+    """ Send HTML from the server."""
+    participantId = request.args.get('userId')
     
+    return render_template('annotation.html', participantId=participantId)
+    
+        
     
 @app.route('/generation/', methods=['GET'])
 def generation_root():
@@ -251,6 +339,38 @@ def ethicsbot_a_root():
     
     
     
+@socketio.on('user_joined_annotation')
+def user_joined_annotation(message):
+    
+    clients.append(request.sid)
+    
+    pid = message['participantid']
+    room = session.get('room')
+    join_room(room)
+    print(type(pid), pid)
+    if pid != 'None':
+    	
+        with sqlite3.connect('data/session_info.db') as conn:
+            cur = conn.cursor()
+        
+            # get all the relevant sessions for a user
+            session_ids = cur.execute('select sid, count(*) as c from message_pairs where pid="%s" group by sid having c > 0'%pid).fetchall()
+            if len(session_ids) == 0:
+                print('no user sessions?!')
+            else:
+                sid = session_ids[-1][0] # debug: use the last logged session.
+            
+    #             message_pairs: sid text, pid text, condition text, message text, response text, num_written
+            convo = cur.execute('select message, response from message_pairs where sid="%s" order by exchange_num' % sid).fetchall()
+        
+            if len(convo) == 0:
+                convo = [[pid,'null'],]
+        
+        emit('render_convo', convo, room=request.sid)
+    
+    
+    
+
     
 @socketio.on('user_joined')
 def user_joined(message):
@@ -259,10 +379,17 @@ def user_joined(message):
     print(message)
 #     condition = random.choice(CONDITION_NAMES)
     # Add client to client list
-    if message['agent'] != 'covid_flow':
-        torch.cuda.set_device(agents[message['agent']].opt['gpu'])
-    parlai_history = copy.deepcopy(agents[message['agent']].build_history()) if message['agent'] != 'covid_flow' else ''
+    
+    
+    if USE_BLENDER:
+        parlai_history = ''
         
+    else:
+        if message['agent'] != 'covid_flow':
+            torch.cuda.set_device(agents[message['agent']].opt['gpu'])
+        parlai_history = copy.deepcopy(agents[message['agent']].build_history()) if message['agent'] != 'covid_flow' else ''
+        
+    
     session_info[request.sid] = {'joined_time':datetime.datetime.now(), 
                                     'num_written': NUM_WRITTEN_AT_START,
 #                                     'condition': '',
@@ -368,6 +495,23 @@ def package_text(text_string):
     
 
 
+    
+def replace_last_reply(history, reply): 
+    history.history_raw_strings = history.history_raw_strings[:-1]
+    history.history_raw_strings.append(reply)
+    
+    if history.add_person_tokens:
+        reply = history._add_person_tokens(reply, history.p2_token)
+        
+    history.history_strings = history.history_strings[:-1]
+    history.history_strings.append(reply)
+    
+    history.history_vecs = history.history_vecs[:-1]
+    history.history_vecs.append(history.parse(reply))
+
+
+
+
 @socketio.on('user_sent_message_generate')   
 def user_sent_message_generate(message):
     
@@ -390,13 +534,14 @@ def user_sent_message_generate(message):
     
     # Extract a string of the user's message
     raw_user_input_text = message["data"]
-#     flow_has_more = exchange_num < len(CONDITION_MESSAGES[condition])
+    flow_has_more = exchange_num < len(CONDITION_MESSAGES_NO_ACK[CONDITION_NAMES_NO_ACK[0]])
     input_not_empty = len(raw_user_input_text.strip()) > 0
     
 #     message['is_done'] = 'false' if flow_has_more else 'true'
     emit('render_usr_message', message, room=request.sid)
     
-    if input_not_empty:
+        
+    if flow_has_more and input_not_empty:
     
         input_text = raw_user_input_text
         
@@ -415,7 +560,13 @@ def user_sent_message_generate(message):
         
         # generate bot response
         agent_output = agents[agent_choice].act()
-        bot_response = normalize_reply(agent_output['text'])
+        
+        ack = normalize_reply(agent_output['text'])
+        continuation = CONDITION_MESSAGES_NO_ACK[CONDITION_NAMES_NO_ACK[0]][exchange_num]
+        bot_response = ack + " " + continuation
+        
+        
+        replace_last_reply(agents[agent_choice].history, bot_response)
         
         print(agent_output)
         print('POST-GEN: ')
@@ -469,9 +620,11 @@ def user_sent_message_generate(message):
 #     elif not flow_has_more:
 #         emit('render_sys_message', {"data": '[Chat completed. Please continue to survey.]'}, room=request.sid)
             
-    else:
+    elif not input_not_empty:
         emit('render_sys_message', {"data": '[oops, please enter message text]'}, room=request.sid)
-        
+
+    else:
+        emit('render_sys_message', {"data": '[Chat completed. Please continue to survey or refresh page for a new conversation.]'}, room=request.sid)
 
 
 @socketio.on('user_sent_message_interleave')   
@@ -507,43 +660,58 @@ def user_sent_message_interleave(message):
         
         input_text = raw_user_input_text
         
-        torch.cuda.set_device(agents[message['agent']].opt['gpu'])
+        if not USE_BLENDER:
+            torch.cuda.set_device(agents[message['agent']].opt['gpu'])
         
-        # make sure model history is reset
-        agents[agent_choice].reset()
+            # make sure model history is reset
+            agents[agent_choice].reset()
         
-        # set model history as user's conversation history
-        agents[agent_choice].history = copy.deepcopy(session_info[request.sid]['parlai_history'])
+            # set model history as user's conversation history
+            agents[agent_choice].history = copy.deepcopy(session_info[request.sid]['parlai_history'])
         
-        print('PRE-GEN: ')
-        print(agents[agent_choice].history.history_strings)
-        # observe user input        
-        agents[agent_choice].observe(package_text(input_text))
+            print('PRE-GEN: ')
+            print(agents[agent_choice].history.history_strings)
+            # observe user input        
+            agents[agent_choice].observe(package_text(input_text))
         
         
         if flow_has_more and (exchange_num % 2 == 0):
             bot_response = CONDITION_MESSAGES[flow_condition][int(exchange_num/2)]
             
-            agents[agent_choice].history.add_reply(bot_response)
+            if not USE_BLENDER:
+                agents[agent_choice].history.add_reply(bot_response)
         
         else:        
             # generate bot response
-            agent_output = agents[agent_choice].act()
-            bot_response = normalize_reply(agent_output['text'])
-        
-            print(agent_output)
+            
+            if USE_BLENDER: 
+                current_user_text = input_text
+                last_user_text = ''
+                if len(session_info[request.sid]['convo']) > 1: # first pair is ('START', first_flow_message)
+                    last_user_text = session_info[request.sid]['convo'][-1][0]
+                last_bot_response = session_info[request.sid]['convo'][-1][1]
+                    
+                bot_response = get_blender_response(last_user_text, last_bot_response, current_user_text, key=str(time.time()))
+            
+            else:
+                agent_output = agents[agent_choice].act()
+                bot_response = normalize_reply(agent_output['text'])
+                
+#             print(agent_output)
 
-        print('POST-GEN: ')
-        print(agents[agent_choice].history.history_strings)
+#         print('POST-GEN: ')
+#         print(agents[agent_choice].history.history_strings)
         
         # make sure to store updated user's history
-        session_info[request.sid]['parlai_history'] = copy.deepcopy(agents[agent_choice].history)
+        if not USE_BLENDER:
+            session_info[request.sid]['parlai_history'] = copy.deepcopy(agents[agent_choice].history)
         
         # make sure model history is reset
-        agents[agent_choice].reset()
+        if not USE_BLENDER:
+            agents[agent_choice].reset()
         
-        print('POST-RESET: ')
-        print(agents[agent_choice].history.history_strings)
+#         print('POST-RESET: ')
+#         print(agents[agent_choice].history.history_strings)
         
 #         input_text = raw_user_input_text.lower() # debug: review the preprocessing of the raw input text.
         
@@ -769,6 +937,12 @@ def user_sent_message(message):
 #     
 #     
     
+@socketio.on('log_annotations')  
+def log_annotations(annotations):
+    print('called')
+    print(annotations)
+
+
     
 @socketio.on('log_user_feedback') 
 def log_user_feedback(feedback):
