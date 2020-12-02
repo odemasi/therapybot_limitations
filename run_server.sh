@@ -2,6 +2,8 @@
 
 # navigate to: https://language.cs.ucdavis.edu/covidbot/user/
 
-gunicorn --worker-class eventlet -w 1 -b 127.0.0.1:6776 server:app
+CUDA_VISIBLE_DEVICES=2,7 gunicorn --worker-class eventlet -w 1 -b 127.0.0.1:6776 server:app
+
+
 
 

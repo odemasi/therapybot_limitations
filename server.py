@@ -54,6 +54,9 @@ socketio = SocketIO(app)
 # DEBUG = True
 
 NUM_WRITTEN_AT_START = 0
+MAX_GEN_TURNS = 3
+GEN_MIN_LEN = 7
+
 # if DEBUG and SANDBOX: 
 #     NUM_WRITTEN_AT_START = 10
 #     SUBMIT=False
@@ -129,9 +132,9 @@ opt = Opt(
             }
         )        
 
-agent = None
-# agent = create_agent_from_opt_file(opt)
-# agent.set_interactive_mode(True)
+# agent = None
+agent = create_agent_from_opt_file(opt)
+agent.set_interactive_mode(True)
 
 
 
@@ -561,11 +564,12 @@ def user_sent_message_generate(message):
 #     condition = agent_choice
     exchange_num = session_info[request.sid]['num_written']
     last_flow = session_info[request.sid]['last_flow']
-    
+    allow_continue = CONDITION_MESSAGES_NO_ACK['allow_continue'][last_flow] == 'continue'
     
     
     # Extract a string of the user's message
     raw_user_input_text = message["data"]
+    raw_user_input_len = len(raw_user_input_text.split(' '))
     flow_has_more = last_flow + 1 < len(CONDITION_MESSAGES_NO_ACK['flow'])
     input_not_empty = len(raw_user_input_text.strip()) > 0
     
@@ -574,7 +578,7 @@ def user_sent_message_generate(message):
     
         
     if flow_has_more and input_not_empty:
-    
+        
         input_text = raw_user_input_text
         
         torch.cuda.set_device(agents[message['agent']].opt['gpu'])
@@ -585,8 +589,10 @@ def user_sent_message_generate(message):
         # set model history as user's conversation history
         agents[agent_choice].history = copy.deepcopy(session_info[request.sid]['parlai_history'])
         
-        print('PRE-GEN: ')
-        print(agents[agent_choice].history.history_strings)
+        # print('PRE-GEN: ')
+#         print(agents[agent_choice].history.history_strings)
+#         
+        
         # observe user input        
         agents[agent_choice].observe(package_text(input_text))
         
@@ -594,18 +600,40 @@ def user_sent_message_generate(message):
         agent_output = agents[agent_choice].act()
         
         ack = normalize_reply(agent_output['text'])
-        flow_num = last_flow + 1
-        continuation = CONDITION_MESSAGES_NO_ACK['flow'][flow_num]
-        strategy = CONDITION_MESSAGES_NO_ACK['strategy'][flow_num]
         
-        bot_response = ack + " " + continuation
+        # decide if let the user chat only with the generative model w/o any flow
+        generate_only = allow_continue and (session_info[request.sid]['continue_cnt'] < MAX_GEN_TURNS) and (raw_user_input_len >= GEN_MIN_LEN)
+        
+        
+        if generate_only: 
+            print('Generating the full message without any flow text')
+            
+            flow_num = -1
+            strategy = 'generation'
+            
+            bot_response = ack
+            
+            # note that message was only generated
+            session_info[request.sid]['continue_cnt'] += 1 # increment the number of turns since the last flow message
+            
+        else: 
+            # use the generated acknowledgement and add some flow text
+            flow_num = last_flow + 1
+            flow_text = CONDITION_MESSAGES_NO_ACK['flow'][flow_num]
+            strategy = CONDITION_MESSAGES_NO_ACK['strategy'][flow_num]
+            
+            bot_response = ack + " " + flow_text
+            
+            # updating tracking of flow text usage
+            session_info[request.sid]['last_flow'] = flow_num 
+            session_info[request.sid]['continue_cnt'] = 0 # reset because a new flow message was used
         
         
         replace_last_reply(agents[agent_choice].history, bot_response)
         
-        print(agent_output)
-        print('POST-GEN: ')
-        print(agents[agent_choice].history.history_strings)
+#         print(agent_output)
+#         print('POST-GEN: ')
+#         print(agents[agent_choice].history.history_strings)
         
         
         # make sure to store updated user's history
@@ -614,8 +642,8 @@ def user_sent_message_generate(message):
         # make sure model history is reset
         agents[agent_choice].reset()
         
-        print('POST-RESET: ')
-        print(agents[agent_choice].history.history_strings)
+#         print('POST-RESET: ')
+#         print(agents[agent_choice].history.history_strings)
         
 #         input_text = raw_user_input_text.lower() # debug: review the preprocessing of the raw input text.
         
@@ -641,7 +669,7 @@ def user_sent_message_generate(message):
         
         print('Into message_pairs: ', db_input)
         
-        session_info[request.sid]['last_flow'] = flow_num 
+        
 #         output_text = output_text.replace('fucking', '<EXPLETIVE>').replace('fuck', '<EXPLETIVE>')
     
         # Render our response
