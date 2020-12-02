@@ -80,116 +80,131 @@
                         $('#pid_received').scrollTop($('#pid_received')[0].scrollHeight);
                     });
 
-					
+                    
 
-					socket.on('render_convo', function(data){
-						
-						let box_cols = ['helpful', 'mistake']
-						let box_questions = ['This message was helpful', 'This message seemed like a system error']
-						
-						var form = document.createElement('form');
-// 						form.setAttribute("method", "post"); 
-// 						form.setAttribute("action", "submit.php");
-						
-						let body = document.getElementsByTagName('body')[0];
-						let tbl = document.createElement('table');
-						let thead = document.createElement('thead');
-						let thr = document.createElement('tr');
-						
-// 						append header
-						let tbdy = document.createElement('tbody');
-						let tr = document.createElement('tr');
-						// two empty td for message and response columns
-						var td = document.createElement('td');
-						td.setAttribute("style","width: 300px;");
-						td.appendChild(document.createTextNode(''))
-						tr.appendChild(td);
-						var td = document.createElement('td');
-						td.setAttribute("style","width: 300px;");
-						td.appendChild(document.createTextNode(''))
-						tr.appendChild(td);
-						
-						box_questions.forEach(function (box_q, j){
-								var td = document.createElement('td');
-								td.setAttribute("style","border: 1px solid green; width: 300px;");
-								td.style.fontSize = "20px";
-								td.appendChild(document.createTextNode(box_q));
-								tr.appendChild(td);
-						});
-						tbdy.appendChild(tr); 
-						
-						// append each row with message, response, checkboxes
-						data.forEach(function (pair, i) {
-							let tr = document.createElement('tr');
-							pair.forEach(function (msg, j) {
-								var td = document.createElement('td');
-// 								td.setAttribute("style","border: 1px solid green");
-								td.setAttribute("style","border: 1px solid green; width: 300px;");
-								td.style.fontSize = "20px";
-								td.appendChild(document.createTextNode(msg));
-								tr.appendChild(td);
-								});
-							
-							box_cols.forEach(function (box, j){
-								var td = document.createElement('td');
-								td.setAttribute('style', 'border: 1px solid green; width: 300px; text-align: center; vertical-align: middle;');
-								var cb = document.createElement('input');
-								cb.setAttribute('type', 'checkbox');
-								cb.setAttribute('name', 'is_'+box+'_'+i);
-								cb.setAttribute('value', box+'_'+i);
-								cb.setAttribute('style', "width:20px; height:20px;")
-								td.appendChild(cb);
-								tr.appendChild(td);
-							});
-							
-							
-							tbdy.appendChild(tr);  
-							});
-						
-						tbl.appendChild(tbdy);
-						
-						form.appendChild(tbl);
-						
-						
-						// Append the button to the form 
-						var s = document.createElement("input"); 
-						s.setAttribute("type", "submit"); 
-						s.setAttribute("value", "Submit"); 
-						s.setAttribute('onclick', "return storeAnnotations();");
-						s.setAttribute('id', 'AnnotationSubmitButton');
-						s.setAttribute('style', 'height: 40px; width: 300px')
-						form.append(s); 
-						
-						body.appendChild(form);
-						return tbl;
-						
-					});
-										
-					
+                    socket.on('render_convo', function(data){
+                        
+                        let body = document.getElementsByTagName('body')[0];
+                        
+                        if (data.length == 1){
+                            let tbl = document.createElement('table');
+                            let tbdy = document.createElement('tbody');
+                            let tr = document.createElement('tr');
+                            let td  = document.createElement('td');
+                            td.appendChild(document.createTextNode('Please click the -> button to move on to the next step'));
+                            td.style.fontSize = "20px";
+                            tr.appendChild(td);
+                            tbdy.appendChild(tr);
+                            body.appendChild(tbdy);
+                            return;
+                        }
+                        
+                        
+                        let box_cols = ['helpful', 'mistake']
+                        let box_questions = ['This message was helpful', 'This message seemed like a system error']
+                        
+                        var form = document.createElement('form');
+//                      form.setAttribute("method", "post"); 
+//                      form.setAttribute("action", "submit.php");
+                        
+                        let tbl = document.createElement('table');
+                        let thead = document.createElement('thead');
+                        let thr = document.createElement('tr');
+                        
+//                      append header
+                        let tbdy = document.createElement('tbody');
+                        let tr = document.createElement('tr');
+                        // two empty td for message and response columns
+                        var td = document.createElement('td');
+                        td.setAttribute("style","width: 300px;");
+                        td.appendChild(document.createTextNode(''))
+                        tr.appendChild(td);
+                        var td = document.createElement('td');
+                        td.setAttribute("style","width: 300px;");
+                        td.appendChild(document.createTextNode(''))
+                        tr.appendChild(td);
+                        
+                        box_questions.forEach(function (box_q, j){
+                                var td = document.createElement('td');
+                                td.setAttribute("style","border: 1px solid green; width: 300px;");
+                                td.style.fontSize = "20px";
+                                td.appendChild(document.createTextNode(box_q));
+                                tr.appendChild(td);
+                        });
+                        tbdy.appendChild(tr); 
+                        
+                        // append each row with message, response, checkboxes
+                        data.forEach(function (pair, i) {
+                            let tr = document.createElement('tr');
+                            pair.forEach(function (msg, j) {
+                                var td = document.createElement('td');
+//                              td.setAttribute("style","border: 1px solid green");
+                                td.setAttribute("style","border: 1px solid green; width: 300px;");
+                                td.style.fontSize = "20px";
+                                td.appendChild(document.createTextNode(msg));
+                                tr.appendChild(td);
+                                });
+                            
+                            box_cols.forEach(function (box, j){
+                                var td = document.createElement('td');
+                                td.setAttribute('style', 'border: 1px solid green; width: 300px; text-align: center; vertical-align: middle;');
+                                var cb = document.createElement('input');
+                                cb.setAttribute('type', 'checkbox');
+                                cb.setAttribute('name', 'is_'+box+'_'+i);
+                                cb.setAttribute('value', box+'_'+i);
+                                cb.setAttribute('style', "width:20px; height:20px;")
+                                td.appendChild(cb);
+                                tr.appendChild(td);
+                            });
+                            
+                            
+                            tbdy.appendChild(tr);  
+                            });
+                        
+                        tbl.appendChild(tbdy);
+                        
+                        form.appendChild(tbl);
+                        
+                        
+                        // Append the button to the form 
+                        var s = document.createElement("input"); 
+                        s.setAttribute("type", "submit"); 
+                        s.setAttribute("value", "Submit"); 
+                        s.setAttribute('onclick', "return storeAnnotations();");
+                        s.setAttribute('id', 'AnnotationSubmitButton');
+                        s.setAttribute('style', 'height: 40px; width: 300px')
+                        form.append(s); 
+                        
+                        body.appendChild(form);
+                        return tbl;
+                        
+                    });
+                                        
+                    
                 });
-		
-			function storeAnnotations() {						
-				socket.emit('log_annotations', {data: $('form').serialize()});
-				alert("Submitted! Please continue.");
-				};
-				
+        
+            function storeAnnotations() {                       
+                socket.emit('log_annotations', {data: $('form').serialize()});
+                alert("Submitted! Please continue.");
+                };
+                
             </script>
             
             
             <div>
-            	
-            	<input type="hidden" id="pid" name="participantId" value="{{participantId}}" />
-				
+                
+                <input type="hidden" id="pid" name="participantId" value="{{participantId}}" />
+                
 <!-- 
-				<h1 class="title is-4" style="width: 100%; text-align: left;">Chatbot study: Annotate conversation experience</h1>
+                <h1 class="title is-4" style="width: 100%; text-align: left;">Chatbot study: Annotate conversation experience</h1>
                 <br>
                 <b>Instructions:</b>
                 <br>
-               	Below you should see a conversation that you previously had with the chatbot. 
-               	We would like more information on how you found each chatbot message.
-               	Next to each chatbot message there is at least one checkbox that pertains to a question above the column of checkboxes.
-               	If you think a chatbot message relates to the question, please check the box next to that response, i.e., check the boxes next to all the responses that you found, e.g., helpful.
-               	
+                Below you should see a conversation that you previously had with the chatbot. 
+                We would like more information on how you found each chatbot message.
+                Next to each chatbot message there is at least one checkbox that pertains to a question above the column of checkboxes.
+                If you think a chatbot message relates to the question, please check the box next to that response, i.e., check the boxes next to all the responses that you found, e.g., helpful.
+                
                 <br>
                 
                 <br>

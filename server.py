@@ -377,7 +377,11 @@ def user_joined_annotation(message):
                                                 'annotation_type': 'disliked'}
                     emit('render_convo', convo, room=request.sid)
                     print('Rendering conversation for pid %s, session %s' % (pid, annotated_sid), convo)
-    
+    else:
+        convo = ['Please click the -> button to move on to the next step']
+        emit('render_convo', convo, room=request.sid)
+        print('Rendering move on message')
+        
     
     
 
@@ -690,7 +694,7 @@ def user_sent_message_generate(message):
         emit('render_sys_message', {"data": '[oops, please enter message text]'}, room=request.sid)
 
     else:
-        emit('render_sys_message', {"data": '[Chat completed. Please continue to survey or refresh page for a new conversation.]'}, room=request.sid)
+        emit('render_sys_message', {"data": '[Chat completed. Please click the “->” button to move on to the next step.]'}, room=request.sid)
 
 
 # @socketio.on('user_sent_message_interleave')   
