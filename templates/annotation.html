@@ -81,55 +81,12 @@
                     });
 
 					
-// 					socket.on('render_convo', function(data){
-// 					
-// 						let objectArray = [
-// 								  {name: 'Banana', price: '3.04'}, // k[0]
-// 								  {name: 'Orange', price: '2.56'},  // k[1]
-// 								  {name: 'Apple', price: '1.45'}
-// 							   ]
-// 						let body = document.getElementsByTagName('body')[0];
-// 						let tbl = document.createElement('table');
-// 						let thead = document.createElement('thead');
-// 						let thr = document.createElement('tr');
-// 
-// 						for (p in objectArray[0]){
-// 						let th = document.createElement('th');
-// 						th.appendChild(document.createTextNode(p));
-// 						thr.appendChild(th);
-// 
-// 						}
-// 
-// 						thead.appendChild(thr);
-// 						tbl.appendChild(thead);
-// 
-// 						let tbdy = document.createElement('tbody');
-// 						let tr = document.createElement('tr');
-// 						objectArray.forEach((object) => {
-// 						let n = 0;
-// 						let tr = document.createElement('tr');
-// 						for (p in objectArray[0]){
-// 						  var td = document.createElement('td');
-// 						  td.setAttribute("style","border: 1px solid green");
-// 						  td.appendChild(document.createTextNode(object[p]));
-// 						  tr.appendChild(td);
-// 						  n++;
-// 						};
-// 						tbdy.appendChild(tr);    
-// 						});
-// 						tbl.appendChild(tbdy);
-// 						body.appendChild(tbl)
-// 						return tbl;
-// 						
-// 					});
+
 					socket.on('render_convo', function(data){
 						
 						let box_cols = ['helpful', 'mistake']
-// 						let objectArray = [
-// 								  {name: 'Banana', price: '3.04'}, // k[0]
-// 								  {name: 'Orange', price: '2.56'},  // k[1]
-// 								  {name: 'Apple', price: '1.45'}
-// 							   ]
+						let box_questions = ['This message was helpful', 'This message seemed like a system error']
+						
 						var form = document.createElement('form');
 // 						form.setAttribute("method", "post"); 
 // 						form.setAttribute("action", "submit.php");
@@ -138,19 +95,30 @@
 						let tbl = document.createElement('table');
 						let thead = document.createElement('thead');
 						let thr = document.createElement('tr');
-
-// 						for (p in objectArray[0]){
-// 						let th = document.createElement('th');
-// 						th.appendChild(document.createTextNode(p));
-// 						thr.appendChild(th);
-// 
-// 						}
-
-// 						thead.appendChild(thr);
-// 						tbl.appendChild(thead);
-
+						
+// 						append header
 						let tbdy = document.createElement('tbody');
 						let tr = document.createElement('tr');
+						// two empty td for message and response columns
+						var td = document.createElement('td');
+						td.setAttribute("style","width: 300px;");
+						td.appendChild(document.createTextNode(''))
+						tr.appendChild(td);
+						var td = document.createElement('td');
+						td.setAttribute("style","width: 300px;");
+						td.appendChild(document.createTextNode(''))
+						tr.appendChild(td);
+						
+						box_questions.forEach(function (box_q, j){
+								var td = document.createElement('td');
+								td.setAttribute("style","border: 1px solid green; width: 300px;");
+								td.style.fontSize = "20px";
+								td.appendChild(document.createTextNode(box_q));
+								tr.appendChild(td);
+						});
+						tbdy.appendChild(tr); 
+						
+						// append each row with message, response, checkboxes
 						data.forEach(function (pair, i) {
 							let tr = document.createElement('tr');
 							pair.forEach(function (msg, j) {
@@ -164,6 +132,7 @@
 							
 							box_cols.forEach(function (box, j){
 								var td = document.createElement('td');
+								td.setAttribute('style', 'border: 1px solid green; width: 300px; text-align: center; vertical-align: middle;');
 								var cb = document.createElement('input');
 								cb.setAttribute('type', 'checkbox');
 								cb.setAttribute('name', 'is_'+box+'_'+i);
@@ -174,13 +143,6 @@
 							});
 							
 							
-							
-// 							var cb = document.createElement('checkbox');
-// 							cb.setAttribute('name', 'is_mistake_'+i);
-// 							cb.setAttribute('value', 'mistake_'+i);
-// 							tr.appendChild(cb)
-							
-							
 							tbdy.appendChild(tr);  
 							});
 						
@@ -188,18 +150,18 @@
 						
 						form.appendChild(tbl);
 						
+						
+						// Append the button to the form 
 						var s = document.createElement("input"); 
 						s.setAttribute("type", "submit"); 
 						s.setAttribute("value", "Submit"); 
 						s.setAttribute('onclick', "return storeAnnotations();");
 						s.setAttribute('id', 'AnnotationSubmitButton');
-						// Append the button to the form 
+						s.setAttribute('style', 'height: 40px; width: 300px')
 						form.append(s); 
 						
 						body.appendChild(form);
 						return tbl;
-						
-
 						
 					});
 										
@@ -218,7 +180,7 @@
             	
             	<input type="hidden" id="pid" name="participantId" value="{{participantId}}" />
 				
-				<h1 class="title is-4" style="width: 100%; text-align: left;">Welcome to our chatbot study! Testing annotation</h1>
+				<h1 class="title is-4" style="width: 100%; text-align: left;">Chatbot study: Annotate conversation experience</h1>
 <!-- 
                 Crisisbot is a tool that we are developing to help suicide prevention hotline counselors practice counseling. 
                 It is a fictional person contacting a fictional text hotline for help. 
@@ -228,21 +190,13 @@
                 <br>
                 <b>Instructions:</b>
                 <br>
-                To complete this task and be compensated for your time, you must chat with the system and take a survey.
-                Before you can take the survey, you must write 12 messages and the system must respond 12 times. 
-                You can only send one message at a time and we log your interactions.
-<!--                 This task should take approximately 10 minutes, so you will be offered $5 for each conversation and survey you complete, up to the number of conversations requested by the researchers. -->
+               	Below you should see a conversation that you previously had with the chatbot. 
+               	We would like more information on how you found each chatbot message.
+               	Next to each chatbot message there is at least one checkbox that pertains to a question above the column of checkboxes.
+               	If you think a chatbot message relates to the question, please check the box next to that response, i.e., check the boxes next to all the responses that you found, e.g., helpful.
+               	
                 <br>
                 
-                Please note that if you refresh this page, the conversation will start over and you'll lose your current conversation. 
-                <br>
-<!-- 
-                <br> 
-                <b> Note: Crisisbot is a simulation, not a human. All conversations and names are fictional.</b> 
-                However, because Crisisbot is simulating someone in distress, it may generate upsetting content, including suicidal ideation, self-harm, and symptoms of depression.
-                If you are upset by the simulation, you may stop the task at any time.
-                <br>
- -->
                 <br>
                 <p><small><i>The following task is part of a research study at the University of California, Berkeley and University of California, Davis. 
                 You have the right to decline to participate or to withdraw by not completing this task. 
@@ -252,212 +206,7 @@
                 <br>
                
             </div>
-            
-            <h1 class="title is-4" style="width: 100%; text-align: left;">Survey will appear after you have completed the conversation (12 messages)</h1>
-                <div class="content_section" style="visibility: hidden;">
-                
-                    <h1 class="title is-4" >Thanks for chatting with the system! You may continue chatting and when done, please take this survey about your conversation (required)</h1>
-                    
-                    <b> QUALTRICS INTEGRATION HERE! </b>
-                    
-                    <!-- 
-
-                    <form id="counselor_form"> <!~~ method="post" action="{{ turk_submit_url }}"> ~~>
-                        
-                
-                        
-                        <br>
-                        <b> How coherent was the conversation? </b> 
-                        <div class="control">
-                            <input type="radio" name="coherent" value="coherent-1" required>
-                            1 (didn't make sense)
-                            <input type="radio" name="coherent" value="coherent-2">2
-                            <input type="radio" name="coherent" value="coherent-3">3
-                            <input type="radio" name="coherent" value="coherent-4">4
-                            <input type="radio" name="coherent" value="coherent-5">
-                            5 (could have been a human)
-                        </div>
-                        
-                        
-                        
-                        <br>
-                        <b> How realistic was the conversation as a simulation of a hotline visitor? </b> 
-                        <div class="control">
-                            <input type="radio" name="realistic" value="realistic-1" required>
-                            1 (it wasn't anything like chatting with a real hotline visitor)
-                            <input type="radio" name="realistic" value="realistic-2">2
-                            <input type="radio" name="realistic" value="realistic-3">3
-                            <input type="radio" name="realistic" value="realistic-4">4
-                            <input type="radio" name="realistic" value="realistic-5">
-                            5 (very realistic and representative of what visitor conversations are like)
-                        </div>
-                        
-                        
-                        
-                        
-                        <br>
-                        <b> How consistent was the persona?</b> 
-                        <div class="control">
-                          <label class="radio">
-                            <input type="radio" name="consistent" value="consistent-1" required>
-                            1 (many contradictory statements)
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="consistent" value="consistent-2" required>2
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="consistent" value="consistent-3" required>3
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="consistent" value="consistent-4" required>4
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="consistent" value="consistent-5" required>
-                            5 (consistent and plausible person)
-                          </label>
-                        </div>
-                        
-                        
-                        
-                       <br>
-                        <b> How similar was Crisisbot's persona to previous conversations that you have had with Crisisbot~~was it the same persona?  </b> 
-                        <div class="control">
-                            <input type="radio" name="similarity" value="similarity-0" required>
-                            This is my first conversation with Crisisbot <br>
-                            <input type="radio" name="similarity" value="similarity-1" required>
-                            1 (very similar or too generic to tell the difference)
-                            <input type="radio" name="similarity" value="similarity-2">2
-                            <input type="radio" name="similarity" value="similarity-3">3
-                            <input type="radio" name="similarity" value="similarity-4">4
-                            <input type="radio" name="similarity" value="similarity-5">
-                            5 (it was like I was chatting with a new person)
-                        </div>
-                        
-                        
-                        
-                        
-                        <br>
-                        <b> How fluent and grammatical were the responses?</b> 
-                        <div class="control">
-                          <label class="radio">
-                            <input type="radio" name="fluent" value="fluent-1" required>
-                            1 (constant mistakes, poor english)
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="fluent" value="fluent-2" required>2
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="fluent" value="fluent-3" required>3
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="fluent" value="fluent-4" required>4
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="fluent" value="fluent-5" required>
-                            5 (no mistakes)
-                          </label>
-                        </div>
-                        
-                        
-                        
-                        <br>
-                        <b> How detailed were the chatbot’s responses?</b> 
-                        <div class="control">
-                          <label class="radio">
-                            <input type="radio" name="specific" value="specific-1" required>
-                            1 (only vague answers without any detail)
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="specific" value="specific-2" required>2
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="specific" value="specific-3" required>3
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="specific" value="specific-4" required>4
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="specific" value="specific-5" required>
-                            5 (lots of details)
-                          </label>
-                        </div>
-                        
-                        
-                        
-                        <br>
-                        <b> Overall, how human-like was the chatbot?</b> 
-                        <div class="control">
-                          <label class="radio">
-                            <input type="radio" name="humanlike" value="humanlike-1" required>
-                            1 (not at all)
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="humanlike" value="humanlike-2" required>2
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="humanlike" value="humanlike-3" required>3
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="humanlike" value="humanlike-4" required>4
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="humanlike" value="humanlike-5" required>
-                            5 (could have been a human)
-                          </label>
-                        </div>
-                        
-                        
-                        
-                        <br>
-                        <b> If you were training to be a counselor, how useful would this conversation have been for your training?</b> 
-                        <div class="control">
-                          <label class="radio">
-                            <input type="radio" name="useful" value="useful-1" required>
-                            1 (not at all useful)
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="useful" value="useful-2" required>2
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="useful" value="useful-3" required>3
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="useful" value="useful-4" required>4
-                          </label>
-                          <label class="radio">
-                            <input type="radio" name="useful" value="useful-5" required>
-                            5 (very useful)
-                          </label>
-                        </div>
-                        
-                        
-                        <br>
-                        <b> What did you like most about the conversation?</b> 
-                        <br>
-                        <textarea name="liked" rows=5 cols=60 placeholder="Enter things you liked about the conversation here"></textarea>
-                        <br /><br />
-                        
-                        
-                        <br>
-                        <b> What did you dislike about the conversation? Please give some advice on how to improve.</b> 
-                        <br>
-                        <textarea name="disliked" rows=5 cols=60 placeholder="Enter things you disliked about the conversation here"></textarea>
-                        <br /><br />
-                        
-                        
-                        <br>
-                        <b> Any other feedback on this conversation? (optional)</b> 
-                        <br>
-                        <textarea name="feedback" rows=5 cols=60 placeholder="Enter any additional feedback you have here"></textarea>
-                        <br /><br />
-                        
-                        <button class="btn btn-success" type="submit" value="Submit" id="UserSubmitButton">Finish and Submit Survey</button>
-                    </form>
- -->
-            
-            <div >
-                
-            </div>           
+                   
         </section>
     </body>
 </html>

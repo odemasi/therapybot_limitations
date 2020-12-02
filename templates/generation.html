@@ -22,7 +22,7 @@
 
 
                     socket.on('connect', function() {
-                        socket.emit('user_joined', { agent: 'therapybot'});
+                        socket.emit('user_joined', {agent: 'therapybot', participantid: $('#pid').val()});
                     });
 
                     // This sends the message to server that the user typed and pressed enter
@@ -58,14 +58,14 @@
 //                     });
                     
                     
-                    $('#pid_input').keypress(function(e) {
-                        var code = e.keyCode || e.which;
-                        if (code == 13) {
-                            pid_text = $('#pid_input').val();
-                            $('#pid_input').val('');
-                            socket.emit('user_sent_pid', {data: pid_text, agent: 'therapybot'});
-                        }
-                    });
+//                     $('#pid_input').keypress(function(e) {
+//                         var code = e.keyCode || e.which;
+//                         if (code == 13) {
+//                             pid_text = $('#pid_input').val();
+//                             $('#pid_input').val('');
+//                             socket.emit('user_sent_pid', {data: pid_text, agent: 'therapybot'});
+//                         }
+//                     });
                     
                     
 
@@ -85,11 +85,12 @@
                         $('#chat').val($('#chat').val() + 'SYSTEM: ' + data.data + '\n\n');
                         $('#chat').scrollTop($('#chat')[0].scrollHeight);
                     });
+
                     
-                    socket.on('render_pid', function(data) {
-                        $('#pid_received').val($('#pid_received').val() + data.data);
-                        $('#pid_received').scrollTop($('#pid_received')[0].scrollHeight);
-                    });
+//                     socket.on('render_pid', function(data) {
+//                         $('#pid_received').val($('#pid_received').val() + data.data);
+//                         $('#pid_received').scrollTop($('#pid_received')[0].scrollHeight);
+//                     });
 
 
                                
@@ -128,31 +129,24 @@
 
             </script>
             <div>
-                <h1 class="title is-4" style="width: 100%; text-align: left;">Welcome to our chatbot study! Testing generation</h1>
-<!-- 
-                Crisisbot is a tool that we are developing to help suicide prevention hotline counselors practice counseling. 
-                It is a fictional person contacting a fictional text hotline for help. 
-                Try chatting with Crisisbot to see how well it simulates a hotline visitor.
- -->
-<!--                 <br> -->
+            
+                <input type="hidden" id="pid" name="participantId" value="{{participantId}}" />
+                
+                <h1 class="title is-4" style="width: 100%; text-align: left;">Chatbot study: Chat with a bot</h1>
+
+
                 <br>
                 <b>Instructions:</b>
                 <br>
                 To complete this task and be compensated for your time, you must chat with the system and take a survey.
-                Before you can take the survey, you must write 12 messages and the system must respond 12 times. 
+                Before you can take the survey, you must chat until the system finishes the conversation. 
                 You can only send one message at a time and we log your interactions.
-<!--                 This task should take approximately 10 minutes, so you will be offered $5 for each conversation and survey you complete, up to the number of conversations requested by the researchers. -->
+                
                 <br>
                 
                 Please note that if you refresh this page, the conversation will start over and you'll lose your current conversation. 
                 <br>
-<!-- 
-                <br> 
-                <b> Note: Crisisbot is a simulation, not a human. All conversations and names are fictional.</b> 
-                However, because Crisisbot is simulating someone in distress, it may generate upsetting content, including suicidal ideation, self-harm, and symptoms of depression.
-                If you are upset by the simulation, you may stop the task at any time.
-                <br>
- -->
+                
                 <br>
                 <p><small><i>The following task is part of a research study at the University of California, Berkeley and University of California, Davis. 
                 You have the right to decline to participate or to withdraw by not completing this task. 
@@ -164,6 +158,7 @@
             </div>
             
             
+<!-- 
             <div class="columns is-centered is-multiline">
                 <h1 class="title is-4" style="width: 100%; text-align: left;">Enter your Participant ID before chatting</h1>
                 <div class="column is-one-half">
@@ -176,7 +171,8 @@
                         <textarea readonly class="textarea" id="pid_received" style="resize: none;" rows="1"></textarea><br>
                     </div>
                 </div>
-            </div>    
+            </div>  
+ -->  
                 
                 
             <div class="columns is-centered is-multiline">
@@ -236,14 +232,16 @@
                 <textarea readonly class="textarea" id="feedback_received" style="height: 20px;"></textarea><br>
             
  -->
-            <h1 class="title is-4" style="width: 100%; text-align: left;">Survey will appear after you have completed the conversation (12 messages)</h1>
+            <h1 class="title is-4" style="width: 100%; text-align: left;">Please chat until the system finishes the conversation before moving on to the survey.</h1>
+            <!-- 
+<h1 class="title is-4" style="width: 100%; text-align: left;">Survey will appear after you have completed the conversation (12 messages)</h1>
                 <div class="content_section" style="visibility: hidden;">
                 
                     <h1 class="title is-4" >Thanks for chatting with the system! You may continue chatting and when done, please take this survey about your conversation (required)</h1>
                     
                     <b> QUALTRICS INTEGRATION HERE! </b>
                     
-                    <!-- 
+                    <!~~ 
 
                     <form id="counselor_form"> <!~~ method="post" action="{{ turk_submit_url }}"> ~~>
                         
@@ -436,9 +434,10 @@
                         
                         <button class="btn btn-success" type="submit" value="Submit" id="UserSubmitButton">Finish and Submit Survey</button>
                     </form>
- -->
+ ~~>
             
             <div >
+ -->
                 
             </div>           
         </section>

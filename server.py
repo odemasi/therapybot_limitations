@@ -78,17 +78,17 @@ NUM_WRITTEN_AT_START = 0
 # CONDITION_MESSAGES = {'%s' % x: ['condition %s: response %s' % (x, y) for y in range(11)] for x in range(2)}
 # CONDITION_NAMES = list(CONDITION_MESSAGES.keys())
 
-chat_flows = pd.read_csv('data/chat_flows.csv')
-CONDITION_NAMES = list(chat_flows.columns)
-CONDITION_MESSAGES = {x: list(chat_flows[x].values) for x in CONDITION_NAMES}
+# chat_flows = pd.read_csv('data/chat_flows.csv')
+# CONDITION_NAMES = list(chat_flows.columns)
+# CONDITION_MESSAGES = {x: list(chat_flows[x].values) for x in CONDITION_NAMES}
 
 
-chat_flows_no_ack = pd.read_csv('data/chat_flows_no_ack.csv')
+chat_flows_no_ack = pd.read_csv('data/combined_flow.csv')
 CONDITION_NAMES_NO_ACK = list(chat_flows_no_ack.columns)
 CONDITION_MESSAGES_NO_ACK = {x: list(chat_flows_no_ack[x].values) for x in CONDITION_NAMES_NO_ACK}
 
-print('Flow conditions: ')
-print(CONDITION_NAMES)
+# print('Flow conditions: ')
+# print(CONDITION_NAMES)
 
 # parser = ParlaiParser(True, True, 'Evaluate a model')
 # opt = parser.parse_args()
@@ -129,6 +129,7 @@ opt = Opt(
             }
         )        
 
+agent = None
 # agent = create_agent_from_opt_file(opt)
 # agent.set_interactive_mode(True)
 
@@ -164,7 +165,7 @@ opt = Opt(
 
 # agents = {'therapybot': agent, 'ethics_base': reddit_agent}
 
-# agents = {'therapybot': agent}
+agents = {'therapybot': agent}
 USE_BLENDER = False
 
 
@@ -259,16 +260,18 @@ def user_root():
 @app.route('/annotation/', methods=['GET'])
 def annotation_root():
     """ Send HTML from the server."""
-    participantId = request.args.get('userId')
+    pid = request.args.get('userId')
     
-    return render_template('annotation.html', participantId=participantId)
+    return render_template('annotation.html', participantId=pid)
     
         
     
 @app.route('/generation/', methods=['GET'])
 def generation_root():
     """ Send HTML from the server."""
-    return render_template('generation.html')
+    pid = request.args.get('userId')
+    
+    return render_template('generation.html', participantId=pid)
     
     
     
@@ -348,25 +351,29 @@ def user_joined_annotation(message):
     room = session.get('room')
     join_room(room)
     print(type(pid), pid)
+    
     if pid != 'None':
-    	
+        
         with sqlite3.connect('data/session_info.db') as conn:
             cur = conn.cursor()
         
             # get all the relevant sessions for a user
-            session_ids = cur.execute('select sid, count(*) as c from message_pairs where pid="%s" group by sid having c > 0'%pid).fetchall()
-            if len(session_ids) == 0:
+            pid_session_ids = cur.execute('select sid, c, joined_time from (select sid as s, count(*) as c from message_pairs where pid="%s" group by sid having c > 1) left join session_meta_data on sid=s order by joined_time '%pid).fetchall()
+            
+            if len(pid_session_ids) == 0:
                 print('no user sessions?!')
             else:
-                sid = session_ids[-1][0] # debug: use the last logged session.
+                annotated_sid = pid_session_ids[-1][0] # select the last (most recent) session with more than 1 exchange
             
     #             message_pairs: sid text, pid text, condition text, message text, response text, num_written
-            convo = cur.execute('select message, response from message_pairs where sid="%s" order by exchange_num' % sid).fetchall()
+                convo = cur.execute('select message, response from message_pairs where sid="%s" order by exchange_num' % annotated_sid).fetchall()
         
-            if len(convo) == 0:
-                convo = [[pid,'null'],]
-        
-        emit('render_convo', convo, room=request.sid)
+                if len(convo) != 0:                    
+                    session_info[request.sid] = {'pid': pid, 
+                                                'annotated_sid': annotated_sid,
+                                                'annotation_type': 'disliked'}
+                    emit('render_convo', convo, room=request.sid)
+                    print('Rendering conversation for pid %s, session %s' % (pid, annotated_sid), convo)
     
     
     
@@ -380,6 +387,8 @@ def user_joined(message):
 #     condition = random.choice(CONDITION_NAMES)
     # Add client to client list
     
+    pid = message['participantid']
+    print('User id: %s just joined' % pid)
     
     if USE_BLENDER:
         parlai_history = ''
@@ -397,7 +406,11 @@ def user_joined(message):
 #                                     'hitid': hitid, 
 #                                     'model_name': MTURK_MODEL_NAMES[random.randrange(len(MTURK_MODEL_NAMES))]
                                     'convo': [],
-                                    'parlai_history': parlai_history} #NOTE: this should build an agent-agnostic empty history, but check the agent doesn't matter.
+                                    'parlai_history': parlai_history,
+                                    'pid': pid,
+                                    'agent': message['agent'],
+                                    'last_flow': -1,
+                                    'continue_cnt': 0} #NOTE: this should build an agent-agnostic empty history, but check the agent doesn't matter.
     
     clients.append(request.sid)
 
@@ -406,8 +419,18 @@ def user_joined(message):
     
 #     first_message = 'Hello, thanks for joining the study!' 
     
+    # Note session meta data in db
+    with sqlite3.connect('data/session_info.db') as conn:
+        cur = conn.cursor()
+#             sid text, pid text, agent text, joined_time text
+        db_input = (request.sid, pid, message['agent'], int(datetime.datetime.now().timestamp()))
+        cur.executemany("INSERT INTO session_meta_data VALUES (?, ?, ?, ?)", [db_input,])
+        conn.commit()
+    print('INTO SESSION_META_DATA: ', db_input)
     
-    emit('render_sys_message', {"data": '[Please enter your participant ID above. You may start after the system sends the first message.]'}, room=request.sid) 
+    
+    user_sent_pid(message)
+#     emit('render_sys_message', {"data": '[Please enter your participant ID above. You may start after the system sends the first message.]'}, room=request.sid) 
         
     
     
@@ -444,37 +467,44 @@ def get_condition_for_participant(pid):
 
 
 
-@socketio.on('user_sent_pid')
+# @socketio.on('user_sent_pid')
 def user_sent_pid(message):
     # resent hitid to the counselor's participant id
 #     print('message: ', message)
 #     locations = ['top', 'middle', 'bottom'] if message["version"] == 'distinct' else ['left', 'center', 'right']
     
-    pid = message["data"]
+    pid = message["participantid"]
     chosen_agent = message['agent']
     
     if chosen_agent == 'ethics_base':
         session_info[request.sid]['condition'] = chosen_agent
         selected_condition = 'ethics_base'
         first_message = '[Please write the first message]'
+        strategy = ''
         
     else: 
-        selected_condition = get_condition_for_participant(pid)
-        first_message = CONDITION_MESSAGES[selected_condition][0]
+        selected_condition = 'flow' #get_condition_for_participant(pid)
+        first_message = CONDITION_MESSAGES_NO_ACK[selected_condition][0]
         session_info[request.sid]['convo'].append(('START', first_message))
         session_info[request.sid]['condition'] = selected_condition + '-' + chosen_agent
+        session_info[request.sid]['last_flow'] += 1
+        strategy = CONDITION_MESSAGES_NO_ACK['strategy'][session_info[request.sid]['last_flow']]
+        
+        
+    flow_num = session_info[request.sid]['last_flow']
     
     
-    session_info[request.sid]['pid'] = pid
+#     session_info[request.sid]['pid'] = pid
     condition = session_info[request.sid]['condition']
-    emit('render_pid', {"data":'Participant ID "%s". Session loading first message' %  message["data"]}, room=request.sid)
+#     emit('render_pid', {"data":'Participant ID "%s". Session loading first message' %  message["data"]}, room=request.sid)
         
     with sqlite3.connect('data/session_info.db') as conn:
         cur = conn.cursor()
-#             sid text, pid text, condition text, message text, response text
-        db_input = (request.sid, pid, condition, 'START', first_message, session_info[request.sid]['num_written'])
-        cur.executemany("INSERT INTO message_pairs VALUES (?, ?, ?, ?, ?, ?)", [db_input,])
+#       sid text, pid text, condition text, message text, response text, exchange_num int, strategy text, flow_num int
+        db_input = (request.sid, pid, condition, 'START', first_message, session_info[request.sid]['num_written'], strategy, flow_num)
+        cur.executemany("INSERT INTO message_pairs VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [db_input,])
         conn.commit()
+        
     print('INTO MESSAGE_PAIRS: ', db_input)
     
     
@@ -485,7 +515,7 @@ def user_sent_pid(message):
     if chosen_agent not in ['ethics_base', 'covid_flow']:
         session_info[request.sid]['parlai_history'].add_reply(first_message)
     
-    print("participant id entered", pid)
+    print("participant id %s logged first message" % pid)
     
 
 
@@ -530,11 +560,13 @@ def user_sent_message_generate(message):
     condition = session_info[request.sid]['condition']#+'-'+agent_choice
 #     condition = agent_choice
     exchange_num = session_info[request.sid]['num_written']
+    last_flow = session_info[request.sid]['last_flow']
+    
     
     
     # Extract a string of the user's message
     raw_user_input_text = message["data"]
-    flow_has_more = exchange_num < len(CONDITION_MESSAGES_NO_ACK[CONDITION_NAMES_NO_ACK[0]])
+    flow_has_more = last_flow + 1 < len(CONDITION_MESSAGES_NO_ACK['flow'])
     input_not_empty = len(raw_user_input_text.strip()) > 0
     
 #     message['is_done'] = 'false' if flow_has_more else 'true'
@@ -562,7 +594,10 @@ def user_sent_message_generate(message):
         agent_output = agents[agent_choice].act()
         
         ack = normalize_reply(agent_output['text'])
-        continuation = CONDITION_MESSAGES_NO_ACK[CONDITION_NAMES_NO_ACK[0]][exchange_num]
+        flow_num = last_flow + 1
+        continuation = CONDITION_MESSAGES_NO_ACK['flow'][flow_num]
+        strategy = CONDITION_MESSAGES_NO_ACK['strategy'][flow_num]
+        
         bot_response = ack + " " + continuation
         
         
@@ -598,12 +633,15 @@ def user_sent_message_generate(message):
 #             sid text, pid text, condition text, message text, response text, exchange_num int
             db_input = (request.sid, pid, condition, 
                         input_text, output_text, 
-                        exchange_num)
-            cur.executemany("INSERT INTO message_pairs VALUES (?, ?, ?, ?, ?, ?)", [db_input])
+                        exchange_num,
+                        strategy, 
+                        flow_num)
+            cur.executemany("INSERT INTO message_pairs VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [db_input])
             conn.commit()
         
         print('Into message_pairs: ', db_input)
         
+        session_info[request.sid]['last_flow'] = flow_num 
 #         output_text = output_text.replace('fucking', '<EXPLETIVE>').replace('fuck', '<EXPLETIVE>')
     
         # Render our response
@@ -627,208 +665,208 @@ def user_sent_message_generate(message):
         emit('render_sys_message', {"data": '[Chat completed. Please continue to survey or refresh page for a new conversation.]'}, room=request.sid)
 
 
-@socketio.on('user_sent_message_interleave')   
-def user_sent_message_interleave(message):
-    
-    """
-    Called when the participant sends a message to the interleave approach.
-    """
-    
-    if len( message["data"].strip()) > 0:
-        session_info[request.sid]['num_written'] += 1
-    # message['count'] = session_info[request.sid]['num_written']
-    
-    agent_choice = message['agent']
-    flow_condition = session_info[request.sid]['condition'].split('-')[0]
-#     session_info[request.sid]['condition'] = flow_condition+'-interleave'
-    condition = session_info[request.sid]['condition']
-    
-    pid = session_info[request.sid]['pid']
-    exchange_num = session_info[request.sid]['num_written']
-    
-    
-    # Extract a string of the user's message
-    raw_user_input_text = message["data"]
-    flow_has_more = int(exchange_num/2) < len(CONDITION_MESSAGES[flow_condition])
-    input_not_empty = len(raw_user_input_text.strip()) > 0
-    
-#     message['is_done'] = 'false' if flow_has_more else 'true'
-    emit('render_usr_message', message, room=request.sid)
-    
-    if input_not_empty:  
-        
-        
-        input_text = raw_user_input_text
-        
-        if not USE_BLENDER:
-            torch.cuda.set_device(agents[message['agent']].opt['gpu'])
-        
-            # make sure model history is reset
-            agents[agent_choice].reset()
-        
-            # set model history as user's conversation history
-            agents[agent_choice].history = copy.deepcopy(session_info[request.sid]['parlai_history'])
-        
-            print('PRE-GEN: ')
-            print(agents[agent_choice].history.history_strings)
-            # observe user input        
-            agents[agent_choice].observe(package_text(input_text))
-        
-        
-        if flow_has_more and (exchange_num % 2 == 0):
-            bot_response = CONDITION_MESSAGES[flow_condition][int(exchange_num/2)]
-            
-            if not USE_BLENDER:
-                agents[agent_choice].history.add_reply(bot_response)
-        
-        else:        
-            # generate bot response
-            
-            if USE_BLENDER: 
-                current_user_text = input_text
-                last_user_text = ''
-                if len(session_info[request.sid]['convo']) > 1: # first pair is ('START', first_flow_message)
-                    last_user_text = session_info[request.sid]['convo'][-1][0]
-                last_bot_response = session_info[request.sid]['convo'][-1][1]
-                    
-                bot_response = get_blender_response(last_user_text, last_bot_response, current_user_text, key=str(time.time()))
-            
-            else:
-                agent_output = agents[agent_choice].act()
-                bot_response = normalize_reply(agent_output['text'])
-                
-#             print(agent_output)
-
-#         print('POST-GEN: ')
-#         print(agents[agent_choice].history.history_strings)
-        
-        # make sure to store updated user's history
-        if not USE_BLENDER:
-            session_info[request.sid]['parlai_history'] = copy.deepcopy(agents[agent_choice].history)
-        
-        # make sure model history is reset
-        if not USE_BLENDER:
-            agents[agent_choice].reset()
-        
-#         print('POST-RESET: ')
-#         print(agents[agent_choice].history.history_strings)
-        
-#         input_text = raw_user_input_text.lower() # debug: review the preprocessing of the raw input text.
-        
-#         output_text, response_info = MODEL_DICT[selected_model].chat(input_text, 
-#                                                                     compound_sid, 
-#                                                                     '', # assignmentid
-#                   
-#         bot_response = CONDITION_MESSAGES[condition][exchange_num]
-
-
-        output_text = bot_response                                       
-   
-        with sqlite3.connect('data/session_info.db') as conn:
-            cur = conn.cursor()
-#             sid text, pid text, condition text, message text, response text, exchange_num int
-            db_input = (request.sid, pid, condition, 
-                        input_text, output_text, 
-                        exchange_num)
-            cur.executemany("INSERT INTO message_pairs VALUES (?, ?, ?, ?, ?, ?)", [db_input])
-            conn.commit()
-        
-        print('Into message_pairs: ', db_input)
-        
-#         output_text = output_text.replace('fucking', '<EXPLETIVE>').replace('fuck', '<EXPLETIVE>')
-    
-        # Render our response
-#         time.sleep(2)
-        emit('render_sys_message', {"data": output_text}, room=request.sid)
-#         response_info_str = json.dumps(response_info) # debug: uncomment storing to sql below.
+# @socketio.on('user_sent_message_interleave')   
+# def user_sent_message_interleave(message):
+#     
+#     """
+#     Called when the participant sends a message to the interleave approach.
+#     """
+#     
+#     if len( message["data"].strip()) > 0:
+#         session_info[request.sid]['num_written'] += 1
+#     # message['count'] = session_info[request.sid]['num_written']
+#     
+#     agent_choice = message['agent']
+#     flow_condition = session_info[request.sid]['condition'].split('-')[0]
+# #     session_info[request.sid]['condition'] = flow_condition+'-interleave'
+#     condition = session_info[request.sid]['condition']
+#     
+#     pid = session_info[request.sid]['pid']
+#     exchange_num = session_info[request.sid]['num_written']
+#     
+#     
+#     # Extract a string of the user's message
+#     raw_user_input_text = message["data"]
+#     flow_has_more = int(exchange_num/2) < len(CONDITION_MESSAGES[flow_condition])
+#     input_not_empty = len(raw_user_input_text.strip()) > 0
+#     
+# #     message['is_done'] = 'false' if flow_has_more else 'true'
+#     emit('render_usr_message', message, room=request.sid)
+#     
+#     if input_not_empty:  
+#         
+#         
+#         input_text = raw_user_input_text
+#         
+#         if not USE_BLENDER:
+#             torch.cuda.set_device(agents[message['agent']].opt['gpu'])
+#         
+#             # make sure model history is reset
+#             agents[agent_choice].reset()
+#         
+#             # set model history as user's conversation history
+#             agents[agent_choice].history = copy.deepcopy(session_info[request.sid]['parlai_history'])
+#         
+#             print('PRE-GEN: ')
+#             print(agents[agent_choice].history.history_strings)
+#             # observe user input        
+#             agents[agent_choice].observe(package_text(input_text))
+#         
+#         
+#         if flow_has_more and (exchange_num % 2 == 0):
+#             bot_response = CONDITION_MESSAGES[flow_condition][int(exchange_num/2)]
+#             
+#             if not USE_BLENDER:
+#                 agents[agent_choice].history.add_reply(bot_response)
+#         
+#         else:        
+#             # generate bot response
+#             
+#             if USE_BLENDER: 
+#                 current_user_text = input_text
+#                 last_user_text = ''
+#                 if len(session_info[request.sid]['convo']) > 1: # first pair is ('START', first_flow_message)
+#                     last_user_text = session_info[request.sid]['convo'][-1][0]
+#                 last_bot_response = session_info[request.sid]['convo'][-1][1]
+#                     
+#                 bot_response = get_blender_response(last_user_text, last_bot_response, current_user_text, key=str(time.time()))
+#             
+#             else:
+#                 agent_output = agents[agent_choice].act()
+#                 bot_response = normalize_reply(agent_output['text'])
+#                 
+# #             print(agent_output)
+# 
+# #         print('POST-GEN: ')
+# #         print(agents[agent_choice].history.history_strings)
+#         
+#         # make sure to store updated user's history
+#         if not USE_BLENDER:
+#             session_info[request.sid]['parlai_history'] = copy.deepcopy(agents[agent_choice].history)
+#         
+#         # make sure model history is reset
+#         if not USE_BLENDER:
+#             agents[agent_choice].reset()
+#         
+# #         print('POST-RESET: ')
+# #         print(agents[agent_choice].history.history_strings)
+#         
+# #         input_text = raw_user_input_text.lower() # debug: review the preprocessing of the raw input text.
+#         
+# #         output_text, response_info = MODEL_DICT[selected_model].chat(input_text, 
+# #                                                                     compound_sid, 
+# #                                                                     '', # assignmentid
+# #                   
+# #         bot_response = CONDITION_MESSAGES[condition][exchange_num]
+# 
+# 
+#         output_text = bot_response                                       
+#    
 #         with sqlite3.connect('data/session_info.db') as conn:
 #             cur = conn.cursor()
-#             cur.executemany("INSERT INTO response_info VALUES (?, ?)", [(compound_sid, response_info_str,)])
+# #             sid text, pid text, condition text, message text, response text, exchange_num int
+#             db_input = (request.sid, pid, condition, 
+#                         input_text, output_text, 
+#                         exchange_num)
+#             cur.executemany("INSERT INTO message_pairs VALUES (?, ?, ?, ?, ?, ?)", [db_input])
 #             conn.commit()
-        
-        session_info[request.sid]['convo'].append((raw_user_input_text, output_text))
-        
+#         
+#         print('Into message_pairs: ', db_input)
+#         
+# #         output_text = output_text.replace('fucking', '<EXPLETIVE>').replace('fuck', '<EXPLETIVE>')
+#     
+#         # Render our response
+# #         time.sleep(2)
+#         emit('render_sys_message', {"data": output_text}, room=request.sid)
+# #         response_info_str = json.dumps(response_info) # debug: uncomment storing to sql below.
+# #         with sqlite3.connect('data/session_info.db') as conn:
+# #             cur = conn.cursor()
+# #             cur.executemany("INSERT INTO response_info VALUES (?, ?)", [(compound_sid, response_info_str,)])
+# #             conn.commit()
+#         
+#         session_info[request.sid]['convo'].append((raw_user_input_text, output_text))
+#         
+# #     elif not flow_has_more:
+# #         emit('render_sys_message', {"data": '[Chat completed. Please continue to survey.]'}, room=request.sid)
+#             
+#     else:
+#         emit('render_sys_message', {"data": '[oops, please enter message text]'}, room=request.sid)
+#         
+#         
+#         
+#         
+#         
+# 
+# 
+# @socketio.on('user_sent_message')   
+# def user_sent_message(message):
+#     """
+#     Called when the participant sends a message.
+#     """
+#     
+#     if len( message["data"].strip()) > 0:
+#         session_info[request.sid]['num_written'] += 1
+#     # message['count'] = session_info[request.sid]['num_written']
+#     
+#     pid = session_info[request.sid]['pid']
+#     condition = session_info[request.sid]['condition']
+#     flow_condition = condition.split('-')[0]
+#     exchange_num = session_info[request.sid]['num_written']
+#     
+#     
+#     # Extract a string of the user's message
+#     raw_user_input_text = message["data"]
+#     flow_has_more = exchange_num < len(CONDITION_MESSAGES[flow_condition])
+#     input_not_empty = len(raw_user_input_text.strip()) > 0
+#     
+#     message['is_done'] = 'false' if flow_has_more else 'true'
+#     emit('render_usr_message', message, room=request.sid)
+#     
+#     
+#     
+#     if flow_has_more and input_not_empty:
+#         
+# #         input_text = raw_user_input_text.lower() # debug: review the preprocessing of the raw input text.
+#         
+# #         output_text, response_info = MODEL_DICT[selected_model].chat(input_text, 
+# #                                                                     compound_sid, 
+# #                                                                     '', # assignmentid
+# #                   
+#         input_text = raw_user_input_text
+#         bot_response = CONDITION_MESSAGES[flow_condition][exchange_num]
+#         output_text = bot_response                                       
+#    
+#         with sqlite3.connect('data/session_info.db') as conn:
+#             cur = conn.cursor()
+# #             sid text, pid text, condition text, message text, response text, exchange_num int
+#             db_input = (request.sid, pid, condition, 
+#                         input_text, output_text, 
+#                         exchange_num)
+#             cur.executemany("INSERT INTO message_pairs VALUES (?, ?, ?, ?, ?, ?)", [db_input])
+#             conn.commit()
+#         
+#         print('Into message_pairs: ', db_input)
+#         
+# #         output_text = output_text.replace('fucking', '<EXPLETIVE>').replace('fuck', '<EXPLETIVE>')
+#     
+#         # Render our response
+#         time.sleep(2)
+#         emit('render_sys_message', {"data": output_text}, room=request.sid)
+# #         response_info_str = json.dumps(response_info) # debug: uncomment storing to sql below.
+# #         with sqlite3.connect('data/session_info.db') as conn:
+# #             cur = conn.cursor()
+# #             cur.executemany("INSERT INTO response_info VALUES (?, ?)", [(compound_sid, response_info_str,)])
+# #             conn.commit()
+#         
+#         session_info[request.sid]['convo'].append((raw_user_input_text, output_text))
+#         
 #     elif not flow_has_more:
 #         emit('render_sys_message', {"data": '[Chat completed. Please continue to survey.]'}, room=request.sid)
-            
-    else:
-        emit('render_sys_message', {"data": '[oops, please enter message text]'}, room=request.sid)
-        
-        
-        
-        
-        
-
-
-@socketio.on('user_sent_message')   
-def user_sent_message(message):
-    """
-    Called when the participant sends a message.
-    """
-    
-    if len( message["data"].strip()) > 0:
-        session_info[request.sid]['num_written'] += 1
-    # message['count'] = session_info[request.sid]['num_written']
-    
-    pid = session_info[request.sid]['pid']
-    condition = session_info[request.sid]['condition']
-    flow_condition = condition.split('-')[0]
-    exchange_num = session_info[request.sid]['num_written']
-    
-    
-    # Extract a string of the user's message
-    raw_user_input_text = message["data"]
-    flow_has_more = exchange_num < len(CONDITION_MESSAGES[flow_condition])
-    input_not_empty = len(raw_user_input_text.strip()) > 0
-    
-    message['is_done'] = 'false' if flow_has_more else 'true'
-    emit('render_usr_message', message, room=request.sid)
-    
-    
-    
-    if flow_has_more and input_not_empty:
-        
-#         input_text = raw_user_input_text.lower() # debug: review the preprocessing of the raw input text.
-        
-#         output_text, response_info = MODEL_DICT[selected_model].chat(input_text, 
-#                                                                     compound_sid, 
-#                                                                     '', # assignmentid
-#                   
-        input_text = raw_user_input_text
-        bot_response = CONDITION_MESSAGES[flow_condition][exchange_num]
-        output_text = bot_response                                       
-   
-        with sqlite3.connect('data/session_info.db') as conn:
-            cur = conn.cursor()
-#             sid text, pid text, condition text, message text, response text, exchange_num int
-            db_input = (request.sid, pid, condition, 
-                        input_text, output_text, 
-                        exchange_num)
-            cur.executemany("INSERT INTO message_pairs VALUES (?, ?, ?, ?, ?, ?)", [db_input])
-            conn.commit()
-        
-        print('Into message_pairs: ', db_input)
-        
-#         output_text = output_text.replace('fucking', '<EXPLETIVE>').replace('fuck', '<EXPLETIVE>')
-    
-        # Render our response
-        time.sleep(2)
-        emit('render_sys_message', {"data": output_text}, room=request.sid)
-#         response_info_str = json.dumps(response_info) # debug: uncomment storing to sql below.
-#         with sqlite3.connect('data/session_info.db') as conn:
-#             cur = conn.cursor()
-#             cur.executemany("INSERT INTO response_info VALUES (?, ?)", [(compound_sid, response_info_str,)])
-#             conn.commit()
-        
-        session_info[request.sid]['convo'].append((raw_user_input_text, output_text))
-        
-    elif not flow_has_more:
-        emit('render_sys_message', {"data": '[Chat completed. Please continue to survey.]'}, room=request.sid)
-            
-    else:
-        emit('render_sys_message', {"data": '[oops, please enter message text]'}, room=request.sid)
-        
-        
+#             
+#     else:
+#         emit('render_sys_message', {"data": '[oops, please enter message text]'}, room=request.sid)
+#         
+#         
         
 #         
 # @socketio.on('user_sent_message')   
@@ -939,9 +977,19 @@ def user_sent_message(message):
     
 @socketio.on('log_annotations')  
 def log_annotations(annotations):
-    print('called')
-    print(annotations)
-
+    
+    with sqlite3.connect('data/session_info.db') as conn:
+        cur = conn.cursor()
+#       sid text, annotated_sid text, annotation_type text, annotations text
+        
+        db_input = (request.sid,
+                    session_info[request.sid]['annotated_sid'],
+                    session_info[request.sid]['annotation_type'],
+                    annotations['data'])
+        cur.executemany("INSERT INTO convo_annotation VALUES (?, ?, ?, ?)", [db_input,])
+        conn.commit()   
+    
+    print('into convo_annotation: ', db_input)
 
     
 @socketio.on('log_user_feedback') 
