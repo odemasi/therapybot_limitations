@@ -132,9 +132,9 @@ opt = Opt(
             }
         )        
 
-# agent = None
-agent = create_agent_from_opt_file(opt)
-agent.set_interactive_mode(True)
+agent = None
+# agent = create_agent_from_opt_file(opt)
+# agent.set_interactive_mode(True)
 
 
 
@@ -163,12 +163,32 @@ agent.set_interactive_mode(True)
 #                             }
 #             }
 #         )
+# 
+# # reddit_agent = None
 # reddit_agent = create_agent_from_opt_file(reddit_opt)
 # reddit_agent.set_interactive_mode(True)
 
-# agents = {'therapybot': agent, 'ethics_base': reddit_agent}
+blender_opt = Opt(
+            {
+                'datapath': 'dummy_path',
+                'model': 'transformer/generator',
+                'init_model': None,
+#                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_v3_first_sent_gpt2_small',
+                'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/data/models/blender/blender_90M/model',
+#                 'model': 'image_seq2seq',
+#                 'init_model': None,
+#                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/fine_tuned_base_dodeca',
+                'load_from_checkpoint': True,
+                'override':{'gpu': REDDIT_GPU, 'beam-min-length': 10, 'inference': 'beam', 'beam_size': 3, 'skip_generation': False, 'beam_block_ngram': 3, 'beam_context_block_ngram': 3}
+            }
+        ) 
+blender_agent = create_agent_from_opt_file(blender_opt)
+blender_agent.set_interactive_mode(True)
 
-agents = {'therapybot': agent}
+
+agents = {'therapybot': agent, 'ethics_base': blender_agent}
+
+# agents = {'therapybot': agent}
 USE_BLENDER = False
 
 
@@ -287,7 +307,9 @@ def interleave_root():
 @app.route('/ethicsbot_a/', methods=['GET'])
 def ethicsbot_a_root():
     """ Send HTML from the server."""
-    return render_template('ethicsbot_a.html')
+    pid = '%s_%s' % (request.args.get('pid'), request.args.get('convo'))
+    
+    return render_template('ethicsbot_a.html', participantId=pid)
     
     
     
@@ -396,6 +418,7 @@ def user_joined(message):
     
     pid = message['participantid']
     print('User id: %s just joined' % pid)
+    
     
     if USE_BLENDER:
         parlai_history = ''
@@ -607,7 +630,8 @@ def user_sent_message_generate(message):
         
         # decide if let the user chat only with the generative model w/o any flow
         generate_only = allow_continue and (session_info[request.sid]['continue_cnt'] < MAX_GEN_TURNS) and (raw_user_input_len >= GEN_MIN_LEN)
-        
+        if message["agent"] == 'ethics_base':
+        	generate_only = True
         
         if generate_only: 
             print('Generating the full message without any flow text')
