@@ -22,7 +22,7 @@
 
 
                     socket.on('connect', function() {
-                        socket.emit('user_joined', {agent: 'therapybot', participantid: $('#pid').val()});
+                        socket.emit('user_joined', {agent: $('#aid').val(), participantid: $('#pid').val()});
                     });
 
                     // This sends the message to server that the user typed and pressed enter
@@ -42,7 +42,7 @@
                         if (code == 13) {
                             text = $('#generation_text').val();
                             $('#generation_text').val('');
-                            socket.emit('user_sent_message_generate', {data: text, agent: 'therapybot'});
+                            socket.emit('user_sent_message_generate', {data: text, agent: $('#aid').val()});
                         }
                     });
                     
@@ -131,6 +131,7 @@
             <div>
             
                 <input type="hidden" id="pid" name="participantId" value="{{participantId}}" />
+                <input type="hidden" id="aid" name="agentId" value="{{agentId}}" />
                 
 <!-- 
                 <h1 class="title is-4" style="width: 100%; text-align: left;">Chatbot study: Chat with the bot</h1>

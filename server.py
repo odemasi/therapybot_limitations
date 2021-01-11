@@ -54,7 +54,7 @@ socketio = SocketIO(app)
 # DEBUG = True
 
 NUM_WRITTEN_AT_START = 0
-MAX_GEN_TURNS = 3
+MAX_GEN_TURNS = 0
 GEN_MIN_LEN = 7
 
 # if DEBUG and SANDBOX: 
@@ -86,7 +86,8 @@ GEN_MIN_LEN = 7
 # CONDITION_MESSAGES = {x: list(chat_flows[x].values) for x in CONDITION_NAMES}
 
 
-chat_flows_no_ack = pd.read_csv('data/combined_flow.csv')
+# chat_flows_no_ack = pd.read_csv('data/flow2.csv')
+chat_flows_no_ack = pd.read_csv('data/New_flow_1_2020.csv')
 CONDITION_NAMES_NO_ACK = list(chat_flows_no_ack.columns)
 CONDITION_MESSAGES_NO_ACK = {x: list(chat_flows_no_ack[x].values) for x in CONDITION_NAMES_NO_ACK}
 
@@ -98,6 +99,7 @@ CONDITION_MESSAGES_NO_ACK = {x: list(chat_flows_no_ack[x].values) for x in CONDI
 # agent = create_agent(opt, requireModelExists=True)
 THERAPYBOT_GPU = 1 # These index the visible devices?
 REDDIT_GPU = 0
+THERAPYBLENDER_GPU = 2
 
 
 ##### overfit on full crisisbot counselor messages
@@ -117,24 +119,46 @@ REDDIT_GPU = 0
         
 
 #### Crisisbot first counselor sentence + empathetic dialogues weighted 1:9
-opt = Opt(
-            {
-                'datapath': 'dummy_path',
-                'model': 'hugging_face/gpt2',
-                'init_model': None,
-#                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_v3_first_sent_gpt2_small',
-                'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_v2_first_sent_gpt2_small',
-#                 'model': 'image_seq2seq',
+# opt = Opt(
+#             {
+#                 'datapath': 'dummy_path',
+#                 'model': 'hugging_face/gpt2',
 #                 'init_model': None,
-#                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/fine_tuned_base_dodeca',
-                'load_from_checkpoint': True,
-                'override':{'gpu': THERAPYBOT_GPU, 'beam-min-length': 3, 'inference': 'beam', 'beam_size': 3, 'skip_generation': False, 'beam_block_ngram': 3, 'beam_context_block_ngram': 3, 'beam_block_list_filename': '/home/oademasi/therapybot_limitations/block_list.txt'}
-            }
-        )        
-
-agent = None
+# #                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_v3_first_sent_gpt2_small',
+#                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_v2_first_sent_gpt2_small',
+# #                 'model': 'image_seq2seq',
+# #                 'init_model': None,
+# #                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/fine_tuned_base_dodeca',
+#                 'load_from_checkpoint': True,
+#                 'override':{'gpu': THERAPYBOT_GPU, 'beam-min-length': 1, 'inference': 'beam', 'beam_size': 3, 'skip_generation': False, 'beam_block_ngram': 3, 'beam_context_block_ngram': 3, 'beam_block_list_filename': '/home/oademasi/therapybot_limitations/block_list.txt'}
+#             }
+#         )        
+# 
 # agent = create_agent_from_opt_file(opt)
 # agent.set_interactive_mode(True)
+agent = None
+
+
+
+# blend_opt = Opt(
+#             {
+#                 'datapath': 'dummy_path',
+#                 'model': 'transformer/generator',
+#                 'init_model': None,
+# #                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_v3_first_sent_gpt2_small',
+# #                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_first_sent_blender90M',
+#                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_first_sent_blender90M_v2',
+# #                 'model': 'image_seq2seq',
+# #                 'init_model': None,
+# #                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/fine_tuned_base_dodeca',
+#                 'load_from_checkpoint': True,
+#                 'override':{'gpu': REDDIT_GPU, 'beam-min-length': 1, 'inference': 'beam', 'beam_size': 3, 'skip_generation': False, 'beam_block_ngram': 3, 'beam_context_block_ngram': 3, 'beam_block_list_filename': '/home/oademasi/therapybot_limitations/block_list.txt'}
+#             }
+#         )        
+# 
+# therapy_blender = create_agent_from_opt_file(blend_opt)
+# therapy_blender.set_interactive_mode(True)
+therapy_blender = None
 
 
 
@@ -168,25 +192,32 @@ agent = None
 # reddit_agent = create_agent_from_opt_file(reddit_opt)
 # reddit_agent.set_interactive_mode(True)
 
-blender_opt = Opt(
-            {
-                'datapath': 'dummy_path',
-                'model': 'transformer/generator',
-                'init_model': None,
-#                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_v3_first_sent_gpt2_small',
-                'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/data/models/blender/blender_90M/model',
-#                 'model': 'image_seq2seq',
+# blender_opt = Opt(
+#             {
+#                 'datapath': 'dummy_path',
+#                 'model': 'transformer/generator',
 #                 'init_model': None,
-#                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/fine_tuned_base_dodeca',
-                'load_from_checkpoint': True,
-                'override':{'gpu': REDDIT_GPU, 'beam-min-length': 10, 'inference': 'beam', 'beam_size': 3, 'skip_generation': False, 'beam_block_ngram': 3, 'beam_context_block_ngram': 3}
-            }
-        ) 
-blender_agent = create_agent_from_opt_file(blender_opt)
-blender_agent.set_interactive_mode(True)
+# #                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_v3_first_sent_gpt2_small',
+# #                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/data/models/blender/blender_90M/model',
+# # #                 'model': 'image_seq2seq',
+# # #                 'init_model': None,
+# # #                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/fine_tuned_base_dodeca',
+# #                 'load_from_checkpoint': True,
+# #                 'override':{'gpu': REDDIT_GPU, 'beam-min-length': 10, 'inference': 'beam', 'beam_size': 3, 'skip_generation': False, 'beam_block_ngram': 3, 'beam_context_block_ngram': 3}
+#                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/therapybot_first_sent_blender90M_v3',
+# #                 'model': 'image_seq2seq',
+# #                 'init_model': None,
+# #                 'model_file': '/home/oademasi/transfer-learning-conv-ai/ParlAI/trained_models/fine_tuned_base_dodeca',
+#                 'load_from_checkpoint': True,
+#                 'override':{'gpu': THERAPYBLENDER_GPU, 'beam-min-length': 1, 'inference': 'beam', 'beam_size': 3, 'skip_generation': False, 'beam_block_ngram': 3, 'beam_context_block_ngram': 3, 'beam_block_list_filename': '/home/oademasi/therapybot_limitations/block_list.txt'}
+#             }
+#         ) 
+# blender_agent = create_agent_from_opt_file(blender_opt)
+# blender_agent.set_interactive_mode(True)
+blender_agent = None
 
 
-agents = {'therapybot': agent, 'ethics_base': blender_agent}
+agents = {'therapybot_GPT': agent, 'therapybot_blender2': therapy_blender, 'therapybot_blender3': blender_agent}
 
 # agents = {'therapybot': agent}
 USE_BLENDER = False
@@ -293,8 +324,12 @@ def annotation_root():
 def generation_root():
     """ Send HTML from the server."""
     pid = request.args.get('userId')
-    
-    return render_template('generation.html', participantId=pid)
+    model_name = request.args.get('model')
+    if model_name is None:
+        print('None!')
+        model_name='GPT'
+    aid = '%s_%s' % ('therapybot', model_name)
+    return render_template('generation.html', participantId=pid, agentId=aid)
     
     
     
@@ -398,7 +433,7 @@ def user_joined_annotation(message):
                                                 'annotated_sid': annotated_sid,
                                                 'annotation_type': 'disliked'}
                     emit('render_convo', convo, room=request.sid)
-                    print('Rendering conversation for pid %s, session %s' % (pid, annotated_sid), convo)
+#                     print('Rendering conversation for pid %s, session %s' % (pid, annotated_sid), convo)
     else:
         convo = ['Please click the -> button to move on to the next step']
         emit('render_convo', convo, room=request.sid)
@@ -424,9 +459,9 @@ def user_joined(message):
         parlai_history = ''
         
     else:
-        if message['agent'] != 'covid_flow':
+        if message['agent'] not in ['covid_flow', 'therapybot_other']:
             torch.cuda.set_device(agents[message['agent']].opt['gpu'])
-        parlai_history = copy.deepcopy(agents[message['agent']].build_history()) if message['agent'] != 'covid_flow' else ''
+        parlai_history = copy.deepcopy(agents[message['agent']].build_history()) if message['agent'] not in ['covid_flow', 'therapybot_other'] else ''
         
     
     session_info[request.sid] = {'joined_time':datetime.datetime.now(), 
@@ -513,12 +548,18 @@ def user_sent_pid(message):
         strategy = ''
         
     else: 
-        selected_condition = 'flow' #get_condition_for_participant(pid)
+        if message['agent'] == 'therapybot_other':
+            selected_condition = 'flow_fixed'
+            strategy = CONDITION_MESSAGES_NO_ACK['strategy_fixed'][session_info[request.sid]['last_flow']]
+        else:
+            selected_condition = 'flow' #get_condition_for_participant(pid)
+            strategy = CONDITION_MESSAGES_NO_ACK['strategy'][session_info[request.sid]['last_flow']]
+            
         first_message = CONDITION_MESSAGES_NO_ACK[selected_condition][0]
         session_info[request.sid]['convo'].append(('START', first_message))
         session_info[request.sid]['condition'] = selected_condition + '-' + chosen_agent
         session_info[request.sid]['last_flow'] += 1
-        strategy = CONDITION_MESSAGES_NO_ACK['strategy'][session_info[request.sid]['last_flow']]
+        
         
         
     flow_num = session_info[request.sid]['last_flow']
@@ -542,7 +583,7 @@ def user_sent_pid(message):
     
     # self_observe the first message into the history of the agent HERE
 #     first_reply = {'id': 'Gpt2', 'episode_done': False, 'text': first_message}
-    if chosen_agent not in ['ethics_base', 'covid_flow']:
+    if chosen_agent not in ['ethics_base', 'covid_flow', 'therapybot_other']:
         session_info[request.sid]['parlai_history'].add_reply(first_message)
     
     print("participant id %s logged first message" % pid)
@@ -597,7 +638,10 @@ def user_sent_message_generate(message):
     # Extract a string of the user's message
     raw_user_input_text = message["data"]
     raw_user_input_len = len(raw_user_input_text.split(' '))
-    flow_has_more = last_flow + 1 < len(CONDITION_MESSAGES_NO_ACK['flow'])
+    if message['agent'] == 'therapybot_other':
+        flow_has_more = last_flow + 1 < len(CONDITION_MESSAGES_NO_ACK['flow_fixed'])
+    else:
+        flow_has_more = last_flow + 1 < len(CONDITION_MESSAGES_NO_ACK['flow'])
     input_not_empty = len(raw_user_input_text.strip()) > 0
     
 #     message['is_done'] = 'false' if flow_has_more else 'true'
@@ -608,78 +652,94 @@ def user_sent_message_generate(message):
         
         input_text = raw_user_input_text
         
-        torch.cuda.set_device(agents[message['agent']].opt['gpu'])
-        
-        # make sure model history is reset
-        agents[agent_choice].reset()
-        
-        # set model history as user's conversation history
-        agents[agent_choice].history = copy.deepcopy(session_info[request.sid]['parlai_history'])
-        
-        # print('PRE-GEN: ')
-#         print(agents[agent_choice].history.history_strings)
-#         
-        
-        # observe user input        
-        agents[agent_choice].observe(package_text(input_text))
-        
-        # generate bot response
-        agent_output = agents[agent_choice].act()
-        
-        ack = normalize_reply(agent_output['text'])
-        
-        # decide if let the user chat only with the generative model w/o any flow
-        generate_only = allow_continue and (session_info[request.sid]['continue_cnt'] < MAX_GEN_TURNS) and (raw_user_input_len >= GEN_MIN_LEN)
-        if message["agent"] == 'ethics_base':
-        	generate_only = True
-        
-        if generate_only: 
-            print('Generating the full message without any flow text')
-            
-            flow_num = -1
-            strategy = 'generation'
-            
-            bot_response = ack
-            
-            # note that message was only generated
-            session_info[request.sid]['continue_cnt'] += 1 # increment the number of turns since the last flow message
-            
-        else: 
+        if message['agent'] == 'therapybot_other':
+
             # use the generated acknowledgement and add some flow text
             flow_num = last_flow + 1
-            flow_text = CONDITION_MESSAGES_NO_ACK['flow'][flow_num]
-            strategy = CONDITION_MESSAGES_NO_ACK['strategy'][flow_num]
-            
-            bot_response = ack + " " + flow_text
-            
+            flow_text = CONDITION_MESSAGES_NO_ACK['flow_fixed'][flow_num]
+            strategy = CONDITION_MESSAGES_NO_ACK['strategy_fixed'][flow_num]
+        
+            bot_response = flow_text
+        
             # updating tracking of flow text usage
             session_info[request.sid]['last_flow'] = flow_num 
             session_info[request.sid]['continue_cnt'] = 0 # reset because a new flow message was used
+            
+            
+        else:
+            torch.cuda.set_device(agents[message['agent']].opt['gpu'])
+        
+            # make sure model history is reset
+            agents[agent_choice].reset()
+        
+            # set model history as user's conversation history
+            agents[agent_choice].history = copy.deepcopy(session_info[request.sid]['parlai_history'])
+        
+            # print('PRE-GEN: ')
+    #         print(agents[agent_choice].history.history_strings)
+    #         
+        
+            # observe user input        
+            agents[agent_choice].observe(package_text(input_text))
+        
+            # generate bot response
+            agent_output = agents[agent_choice].act()
+        
+            ack = normalize_reply(agent_output['text'])
+        
+            # decide if let the user chat only with the generative model w/o any flow
+            generate_only = allow_continue and (session_info[request.sid]['continue_cnt'] < MAX_GEN_TURNS) and (raw_user_input_len >= GEN_MIN_LEN)
+            if message["agent"] == 'ethics_base':
+                generate_only = True
+        
+            if generate_only: 
+                print('Generating the full message without any flow text')
+            
+                flow_num = -1
+                strategy = 'generation'
+            
+                bot_response = ack
+            
+                # note that message was only generated
+                session_info[request.sid]['continue_cnt'] += 1 # increment the number of turns since the last flow message
+            
+            else: 
+                # use the generated acknowledgement and add some flow text
+                flow_num = last_flow + 1
+                flow_text = CONDITION_MESSAGES_NO_ACK['flow'][flow_num]
+                strategy = CONDITION_MESSAGES_NO_ACK['strategy'][flow_num]
+            
+                bot_response = ack + " " + flow_text
+            
+                # updating tracking of flow text usage
+                session_info[request.sid]['last_flow'] = flow_num 
+                session_info[request.sid]['continue_cnt'] = 0 # reset because a new flow message was used
         
         
-        replace_last_reply(agents[agent_choice].history, bot_response)
+            replace_last_reply(agents[agent_choice].history, bot_response)
         
-#         print(agent_output)
-#         print('POST-GEN: ')
-#         print(agents[agent_choice].history.history_strings)
+    #         print(message['agent'])
+    #         print(agent_output)
+    #         print('POST-GEN: ')
+    #         print(agents[agent_choice].history.history_strings)
         
         
-        # make sure to store updated user's history
-        session_info[request.sid]['parlai_history'] = copy.deepcopy(agents[agent_choice].history)
+            # make sure to store updated user's history
+            session_info[request.sid]['parlai_history'] = copy.deepcopy(agents[agent_choice].history)
         
-        # make sure model history is reset
-        agents[agent_choice].reset()
+            # make sure model history is reset
+            agents[agent_choice].reset()
         
-#         print('POST-RESET: ')
-#         print(agents[agent_choice].history.history_strings)
+    #         print('POST-RESET: ')
+    #         print(agents[agent_choice].history.history_strings)
         
-#         input_text = raw_user_input_text.lower() # debug: review the preprocessing of the raw input text.
+    #         input_text = raw_user_input_text.lower() # debug: review the preprocessing of the raw input text.
         
-#         output_text, response_info = MODEL_DICT[selected_model].chat(input_text, 
-#                                                                     compound_sid, 
-#                                                                     '', # assignmentid
-#                   
-#         bot_response = CONDITION_MESSAGES[condition][exchange_num]
+    #         output_text, response_info = MODEL_DICT[selected_model].chat(input_text, 
+    #                                                                     compound_sid, 
+    #                                                                     '', # assignmentid
+    #                   
+    #         bot_response = CONDITION_MESSAGES[condition][exchange_num]
 
 
         output_text = bot_response                                       
@@ -700,8 +760,11 @@ def user_sent_message_generate(message):
         
 #         output_text = output_text.replace('fucking', '<EXPLETIVE>').replace('fuck', '<EXPLETIVE>')
     
+        # Pause if only a flow message to be more natural
+        if message['agent'] == 'therapybot_other':
+            time.sleep(2)
+        
         # Render our response
-#         time.sleep(2)
         emit('render_sys_message', {"data": output_text}, room=request.sid)
 #         response_info_str = json.dumps(response_info) # debug: uncomment storing to sql below.
 #         with sqlite3.connect('data/session_info.db') as conn:
@@ -1034,18 +1097,18 @@ def user_sent_message_generate(message):
 @socketio.on('log_annotations')  
 def log_annotations(annotations):
     
-    with sqlite3.connect('data/session_info.db') as conn:
-        cur = conn.cursor()
-#       sid text, annotated_sid text, annotation_type text, annotations text
+    if request.sid in session_info: # if not, the user didn't have a session to label
+        with sqlite3.connect('data/session_info.db') as conn:
+            cur = conn.cursor()
+    #       sid text, annotated_sid text, annotation_type text, annotations text
         
-        db_input = (request.sid,
-                    session_info[request.sid]['annotated_sid'],
-                    session_info[request.sid]['annotation_type'],
-                    annotations['data'])
-        cur.executemany("INSERT INTO convo_annotation VALUES (?, ?, ?, ?)", [db_input,])
-        conn.commit()   
-    
-    print('into convo_annotation: ', db_input)
+            db_input = (request.sid,
+                        session_info[request.sid]['annotated_sid'],
+                        session_info[request.sid]['annotation_type'],
+                        annotations['data'])
+            cur.executemany("INSERT INTO convo_annotation VALUES (?, ?, ?, ?)", [db_input,])
+            conn.commit()   
+        print('into convo_annotation: ', db_input)
 
     
 @socketio.on('log_user_feedback') 

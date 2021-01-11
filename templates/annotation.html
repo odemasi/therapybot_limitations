@@ -91,17 +91,31 @@
                             let tbdy = document.createElement('tbody');
                             let tr = document.createElement('tr');
                             let td  = document.createElement('td');
-                            td.appendChild(document.createTextNode('Please click the -> button to move on to the next step'));
+                            td.appendChild(document.createTextNode('Please click the submit button to move on to the next step'));
                             td.style.fontSize = "20px";
                             tr.appendChild(td);
                             tbdy.appendChild(tr);
-                            body.appendChild(tbdy);
+                            
+                            
+                            var form = document.createElement('form');
+                            var s = document.createElement("input"); 
+							s.setAttribute("type", "submit"); 
+							s.setAttribute("value", "Submit"); 
+							s.setAttribute('onclick', "return storeAnnotations();");
+							s.setAttribute('id', 'AnnotationSubmitButton');
+							s.setAttribute('style', 'height: 40px; width: 300px; font-size: 20px; font-weight: bold;')
+							
+							
+							form.appendChild(tbdy);
+							form.appendChild(s);
+							
+                            body.appendChild(form);
                             return;
                         }
                         
                         
-                        let box_cols = ['helpful', 'mistake']
-                        let box_questions = ['This message was helpful', 'This message seemed like a system error']
+                        let box_cols = ['helpful', 'error', 'leave']
+                        let box_questions = ['This bot response was helpful', 'This bot response seemed like an error', 'This bot response made me want to leave the conversation here']
                         
                         var form = document.createElement('form');
 //                      form.setAttribute("method", "post"); 
@@ -114,6 +128,7 @@
 //                      append header
                         let tbdy = document.createElement('tbody');
                         let tr = document.createElement('tr');
+                        
                         // two empty td for message and response columns
                         var td = document.createElement('td');
                         td.setAttribute("style","width: 300px;");
@@ -126,7 +141,7 @@
                         
                         box_questions.forEach(function (box_q, j){
                                 var td = document.createElement('td');
-                                td.setAttribute("style","border: 1px solid green; width: 300px;");
+                                td.setAttribute("style","border: 1px solid green; width: 200px; font-weight: bold;");
                                 td.style.fontSize = "20px";
                                 td.appendChild(document.createTextNode(box_q));
                                 tr.appendChild(td);
@@ -147,7 +162,7 @@
                             
                             box_cols.forEach(function (box, j){
                                 var td = document.createElement('td');
-                                td.setAttribute('style', 'border: 1px solid green; width: 300px; text-align: center; vertical-align: middle;');
+                                td.setAttribute('style', 'border: 1px solid green; width: 200px; text-align: center; vertical-align: middle;');
                                 var cb = document.createElement('input');
                                 cb.setAttribute('type', 'checkbox');
                                 cb.setAttribute('name', 'is_'+box+'_'+i);
@@ -172,7 +187,7 @@
                         s.setAttribute("value", "Submit"); 
                         s.setAttribute('onclick', "return storeAnnotations();");
                         s.setAttribute('id', 'AnnotationSubmitButton');
-                        s.setAttribute('style', 'height: 40px; width: 300px')
+                        s.setAttribute('style', 'height: 40px; width: 300px; font-size: 20px; font-weight: bold;')
                         form.append(s); 
                         
                         body.appendChild(form);
@@ -185,8 +200,19 @@
         
             function storeAnnotations() {                       
                 socket.emit('log_annotations', {data: $('form').serialize()});
-                alert("Submitted! Please continue.");
-                };
+                
+                console.log("submit button clicked")
+				window.parent.postMessage(
+					{
+						event_id: 'submit',
+						data: {
+							v1: 'value1', 
+							v2: 'value2'
+					   }
+					}, 
+					"*" 
+				); 
+			};
                 
             </script>
             
