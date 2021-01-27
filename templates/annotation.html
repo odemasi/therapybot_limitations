@@ -114,8 +114,16 @@
                         }
                         
                         
-                        let box_cols = ['helpful', 'error', 'leave']
-                        let box_questions = ['This bot response was helpful', 'This bot response seemed like an error', 'This bot response made me want to leave the conversation here']
+                        let col_questions = ['This bot response was particularly helpful', 'This bot response seemed like an error', 'This bot response made me want to leave the conversation here because']
+                        let box_cols = ['helpful', 'error']//, 'leave']
+                        let leave_options = [["na", "Not applicable (I wanted to continue)"],
+                        					["nolisten", "Bot isn't listening"], 
+											["nofeedback", "Bot doesn't provide helpful feedback"], 
+											["feelworse", "Bot makes me feel worse"],
+											["nocare", "Bot doesn't care about me"],
+											["nointerest", "I'm not interested in talking to a bot"],
+											["wanthuman", "I want to talk to a human"],
+											["other", "Other"]];
                         
                         var form = document.createElement('form');
 //                      form.setAttribute("method", "post"); 
@@ -139,18 +147,21 @@
                         td.appendChild(document.createTextNode(''))
                         tr.appendChild(td);
                         
-                        box_questions.forEach(function (box_q, j){
+                        // header text
+                        col_questions.forEach(function (col_q, j){
                                 var td = document.createElement('td');
                                 td.setAttribute("style","border: 1px solid green; width: 200px; font-weight: bold;");
                                 td.style.fontSize = "20px";
-                                td.appendChild(document.createTextNode(box_q));
+                                td.appendChild(document.createTextNode(col_q));
                                 tr.appendChild(td);
                         });
                         tbdy.appendChild(tr); 
                         
-                        // append each row with message, response, checkboxes
+                        // append each row with message, response, checkboxes, dropdown
                         data.forEach(function (pair, i) {
                             let tr = document.createElement('tr');
+                            
+                            // message and response
                             pair.forEach(function (msg, j) {
                                 var td = document.createElement('td');
 //                              td.setAttribute("style","border: 1px solid green");
@@ -160,9 +171,10 @@
                                 tr.appendChild(td);
                                 });
                             
+                            // checkboxes
                             box_cols.forEach(function (box, j){
                                 var td = document.createElement('td');
-                                td.setAttribute('style', 'border: 1px solid green; width: 200px; text-align: center; vertical-align: middle;');
+                                td.setAttribute('style', 'border: 1px solid green; width: 180px; text-align: center; vertical-align: middle;');
                                 var cb = document.createElement('input');
                                 cb.setAttribute('type', 'checkbox');
                                 cb.setAttribute('name', 'is_'+box+'_'+i);
@@ -172,6 +184,21 @@
                                 tr.appendChild(td);
                             });
                             
+                            // drop down for desire to leave rational 
+                            var td = document.createElement('td');
+							td.setAttribute('style', 'border: 1px solid green; width: 200px; text-align: center; vertical-align: middle;');
+							
+							var dropdown = document.createElement('select');
+							dropdown.setAttribute('name', 'why_leave_'+i);
+							leave_options.forEach(function (lopt, j){
+								var opt = document.createElement('option');
+								opt.value = lopt[0];
+								opt.textContent = lopt[1];
+								dropdown.appendChild(opt);
+							});
+							
+							td.appendChild(dropdown);
+							tr.appendChild(td);
                             
                             tbdy.appendChild(tr);  
                             });
@@ -187,7 +214,7 @@
                         s.setAttribute("value", "Submit"); 
                         s.setAttribute('onclick', "return storeAnnotations();");
                         s.setAttribute('id', 'AnnotationSubmitButton');
-                        s.setAttribute('style', 'height: 40px; width: 300px; font-size: 20px; font-weight: bold;')
+                        s.setAttribute('style', 'height: 40px; width: 300px; font-size: 20px; font-weight: bold;');
                         form.append(s); 
                         
                         body.appendChild(form);
